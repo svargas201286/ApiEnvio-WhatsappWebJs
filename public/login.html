@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login WhatsApp API</title>
+  <link rel="icon" href="data:,">
+</head>
+<body>
+  <h2>Acceso a WhatsApp API</h2>
+  <form id="loginForm">
+    <label>Número de celular:</label><br>
+    <input type="text" id="numero" required><br><br>
+    <label>Contraseña:</label><br>
+    <input type="password" id="password" required><br><br>
+    <button type="submit">Ingresar</button>
+  </form>
+  <div id="session" style="display:none;margin-bottom:10px">
+    <span id="sessionInfo" style="color:green"></span>
+    <button id="logoutBtn" style="margin-left:10px">Cerrar sesión</button>
+  </div>
+  <div id="token" style="color:green;display:none"></div>
+  <div id="qr" style="margin-top:30px;display:none"></div>
+  <div id="sendBox" style="display:none;margin-top:20px">
+    <h3>Enviar mensaje/PDF de prueba</h3>
+    <div>
+      <label>Número destino (EJ: 51988888888):</label><br>
+      <input type="text" id="toNumber" placeholder="51988888888">
+    </div>
+    <div style="margin-top:10px">
+      <label>Mensaje (opcional si envías PDF):</label><br>
+      <input type="text" id="textMsg" placeholder="Hola desde API">
+    </div>
+    <div style="margin-top:10px">
+      <label>PDF (opcional):</label><br>
+      <input type="file" id="pdfFile" accept="application/pdf">
+    </div>
+    <div style="margin-top:10px">
+      <button id="sendBtn">Enviar</button>
+      <span id="sendInfo" style="margin-left:10px;color:#555;display:none"></span>
+    </div>
+  </div>
+  <div id="msg" style="color:red;display:none"></div>
+
+  <script>
+    const loginForm = document.getElementById('loginForm');
+    const qrDiv = document.getElementById('qr');
+    const tokenDiv = document.getElementById('token');
+    const msgDiv = document.getElementById('msg');
+    const sessionDiv = document.getElementById('session');
+    const sessionInfo = document.getElementById('sessionInfo');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    function showInfo(text) {
+      msgDiv.style.color = '#555';
+      msgDiv.textContent = String(text || '');
+      msgDiv.style.display = text ? 'block' : 'none';
+    }
+    function showError(text) {
+      msgDiv.style.color = 'red';
+      msgDiv.textContent = String(text || 'Error desconocido');
+      msgDiv.style.display = 'block';
+    }
+
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return res;
+      } catch (e) {
+        clearTimeout(id);
+        throw e.name === 'AbortError' ? new Error('Tiempo de espera agotado') : e;
+      }
+    }
+
+    function showSession(numero, token) {
+      loginForm.style.display = 'none';
+      sessionInfo.textContent = `Sesión activa: ${numero}`;
+      sessionDiv.style.display = 'block';
+      tokenDiv.textContent = "Tu token: " + token;
+      tokenDiv.style.display = 'block';
+      document.getElementById('sendBox').style.display = 'block';
+    }
+
+    async function checkQr(numero) {
+      try {
+        showInfo('Consultando QR...');
+        const qrRes = await fetchWithTimeout(`/api/qr?numero=${numero}`);
+        if (!qrRes.ok) throw new Error(`QR status ${qrRes.status}`);
+        const qrData = await qrRes.json();
+        if (qrData.qr) {
+          showInfo('');
+          qrDiv.innerHTML = `<h3>Escanea el QR con tu WhatsApp</h3><img src="${qrData.qr}" /><div style="margin-top:8px;color:#555">Estado: ${qrData.state || 'UNKNOWN'}</div>`;
+          qrDiv.style.display = 'block';
+        } else if (qrData.ready) {
+          showInfo('');
+          qrDiv.innerHTML = `<span style="color:green">¡Sesión de WhatsApp ya vinculada!</span><div style="margin-top:8px;color:#555">Estado: ${qrData.state || 'CONNECTED'}</div>`;
+          qrDiv.style.display = 'block';
+        } else {
+          qrDiv.innerHTML = `<span>Preparando sesión... solicitando QR</span><div style="margin-top:8px;color:#555">Estado: ${qrData.state || 'INIT'}</div>`;
+          qrDiv.style.display = 'block';
+          setTimeout(() => checkQr(numero), 5000);
+        }
+      } catch (err) {
+        showError(err.message || err);
+      }
+    }
+
+    // Restaurar sesión si existe
+    (function restoreSession() {
+      const saved = localStorage.getItem('wa_session');
+      if (!saved) return;
+      try {
+        const { numero, token } = JSON.parse(saved);
+        if (numero && token) {
+          showSession(numero, token);
+          checkQr(numero);
+          // polling de estado para reflejar desvinculaciones
+          startStatusPolling(numero);
+        }
+      } catch (_) {}
+    })();
+
+    logoutBtn.onclick = function() {
+      localStorage.removeItem('wa_session');
+      // Reset UI
+      sessionDiv.style.display = 'none';
+      tokenDiv.style.display = 'none';
+      qrDiv.style.display = 'none';
+      loginForm.style.display = 'block';
+      msgDiv.style.display = 'none';
+    };
+
+    loginForm.onsubmit = async function(e) {
+      e.preventDefault();
+      qrDiv.style.display = 'none';
+      tokenDiv.style.display = 'none';
+      msgDiv.style.display = 'none';
+      const numero = document.getElementById('numero').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        showInfo('Registrando/ingresando...');
+        // Registrar primero (si ya existe, ignorar) y luego login
+        try {
+          await fetchWithTimeout('/api/registro', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ numero, password })
+          });
+        } catch (_) {}
+
+        const res = await fetchWithTimeout('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero, password })
+        });
+        if (!res.ok) throw new Error(`Login status ${res.status}`);
+        const data = await res.json();
+        if (!data.token) throw new Error('Sin token en login');
+
+        localStorage.setItem('wa_session', JSON.stringify({ numero, token: data.token }));
+        showSession(numero, data.token);
+        await checkQr(numero);
+        startStatusPolling(numero);
+      } catch (err) {
+        showError(err.message || err);
+      }
+
+      function startStatusPolling(numero) {
+        if (window._statusTimer) clearInterval(window._statusTimer);
+        window._statusTimer = setInterval(async () => {
+          try {
+            const res = await fetchWithTimeout(`/api/status?numero=${numero}`);
+            const st = await res.json();
+            if (st.ready) {
+              qrDiv.innerHTML = `<span style="color:green">¡Sesión de WhatsApp ya vinculada!</span>`;
+              qrDiv.style.display = 'block';
+            } else if (!st.ready && !st.hasQr) {
+              // Sesión desconectada: mostrar necesidad de nuevo QR
+              qrDiv.innerHTML = `<span>Sesión desconectada. Vuelve a iniciar para obtener nuevo QR.</span>`;
+              qrDiv.style.display = 'block';
+            }
+          } catch (_) {}
+        }, 5000);
+      }
+    };
+
+    // Envío de prueba
+    document.getElementById('sendBtn').onclick = async function() {
+      const saved = localStorage.getItem('wa_session');
+      if (!saved) return showError('No hay sesión');
+      const { token } = JSON.parse(saved);
+      const to = document.getElementById('toNumber').value.trim();
+      const text = document.getElementById('textMsg').value;
+      const fileInput = document.getElementById('pdfFile');
+      const sendInfo = document.getElementById('sendInfo');
+      if (!to) return showError('Ingresa número destino');
+      sendInfo.style.display = 'inline';
+      sendInfo.textContent = 'Enviando...';
+      try {
+        let body;
+        if (fileInput.files && fileInput.files[0]) {
+          const file = fileInput.files[0];
+          const arrayBuffer = await file.arrayBuffer();
+          const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          body = {
+            number: to,
+            mediatype: 'document',
+            media: base64Data,
+            filename: file.name || 'archivo.pdf',
+            caption: text || ''
+          };
+        } else {
+          // Enviar solo texto como caption con un archivo vacío no es válido. Por simplicidad, mandamos un PDF falso? No. Mejor mostrar mensaje.
+          // Aquí usamos un pequeño PDF vacío codificado si el usuario no adjunta.
+          const emptyPdf = 'JVBERi0xLjQKJcTl8uXrp/Og0MTGCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nL1BhZ2VzIDIgMCBSPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZS9QYWdlcy9LaWRzWzMgMCBSXT4+CmVuZG9iagozIDAgb2JqCjw8L1R5cGUvUGFnZS9NZWRpYUJveFswIDAgNjEyIDc5Ml0+PgplbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDkzIDAwMDAwIG4gCjAwMDAwMDAxNjIgMDAwMDAgbiAKMDAwMDAwMDI1MSAwMDAwMCBuIAp0cmFpbGVyCjw8L1Jvb3QgMSAwIFIvU2l6ZSA0Pj4KJSVFT0Y=';
+          body = { number: to, mediatype: 'document', media: emptyPdf, filename: 'mensaje.pdf', caption: text || '' };
+        }
+
+        const res = await fetch('/api/send-whatsap', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.succes && !data.success) throw new Error(data.error || 'Error enviando');
+        sendInfo.textContent = 'Enviado correctamente';
+      } catch (e) {
+        sendInfo.textContent = 'Error: ' + (e.message || e);
+      }
+    };
+  </script>
+</body>
+</html>
