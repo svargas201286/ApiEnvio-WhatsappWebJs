@@ -2,6 +2,7 @@ const express = require('express');
 const app = express();
 const db = require('./db');
 const routes = require('./routes/index');
+const whatsappController = require('./controllers/whatsappController');
 
 // Manejo global de errores no capturados
 process.on('uncaughtException', (error) => {
@@ -44,6 +45,54 @@ db.query(`CREATE TABLE IF NOT EXISTS usuarios (
   password VARCHAR(255) NOT NULL,
   token VARCHAR(64) NOT NULL
 )`, () => {});
+
+// Crear tabla de dispositivos WhatsApp
+db.query(`CREATE TABLE IF NOT EXISTS dispositivos_whatsapp (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  numero VARCHAR(20) UNIQUE NOT NULL,
+  nombre VARCHAR(100) DEFAULT 'Dispositivo',
+  estado ENUM('conectado', 'desconectado', 'conectando') DEFAULT 'desconectado',
+  fecha_conexion TIMESTAMP NULL,
+  fecha_desconexion TIMESTAMP NULL,
+  ultima_actividad TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  instancia_id VARCHAR(255),
+  qr_code TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)`, () => {});
+
+// Inicializar WhatsApp para el usuario existente
+async function initializeWhatsApp() {
+  try {
+    // Buscar usuarios existentes en la base de datos
+    db.query('SELECT numero FROM usuarios', async (err, results) => {
+      if (err) {
+        console.error('Error al obtener usuarios:', err);
+        return;
+      }
+      
+      if (results.length > 0) {
+        console.log(`📱 Inicializando WhatsApp para ${results.length} usuario(s)...`);
+        
+        for (const user of results) {
+          const numero = user.numero;
+          console.log(`🔗 Conectando WhatsApp para: ${numero}`);
+          
+          try {
+            await whatsappController.ensureClient(numero);
+            console.log(`✅ WhatsApp inicializado para: ${numero}`);
+          } catch (error) {
+            console.error(`❌ Error al inicializar WhatsApp para ${numero}:`, error.message);
+          }
+        }
+      } else {
+        console.log('📱 No hay usuarios registrados para inicializar WhatsApp');
+      }
+    });
+  } catch (error) {
+    console.error('Error en initializeWhatsApp:', error);
+  }
+}
 
 // Endpoint de verificación rápida
 app.get('/api/health', (req, res) => {
@@ -132,6 +181,11 @@ const server = app.listen(3000, '0.0.0.0', () => {
   console.log('API escuchando en puerto 3000');
   console.log('Sistema iniciado correctamente');
   console.log('Accesible desde la red en: http://TU_IP_ESTATICA:3000');
+  
+  // Inicializar WhatsApp después de que el servidor esté listo
+  setTimeout(() => {
+    initializeWhatsApp();
+  }, 2000); // Esperar 2 segundos para que todo esté listo
 });
 
 // Manejo de errores del servidor

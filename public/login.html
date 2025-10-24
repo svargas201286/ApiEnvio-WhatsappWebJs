@@ -73,7 +73,8 @@
       }
     }
 
-    function showSession(numero, token) {
+    // Función removida - ya no se necesita
+    function showSession_OLD(numero, token) {
       loginForm.style.display = 'none';
       sessionInfo.textContent = `Sesión activa: ${numero}`;
       sessionDiv.style.display = 'block';
@@ -82,7 +83,8 @@
       document.getElementById('sendBox').style.display = 'block';
     }
 
-    async function checkQr(numero) {
+    // Función removida - ya no se necesita
+    async function checkQr_OLD(numero) {
       try {
         showInfo('Consultando QR...');
         const qrRes = await fetchWithTimeout(`/api/qr?numero=${numero}`);
@@ -106,29 +108,23 @@
       }
     }
 
-    // Restaurar sesión si existe
+    // Restaurar sesión si existe - redirigir al dashboard
     (function restoreSession() {
       const saved = localStorage.getItem('wa_session');
       if (!saved) return;
       try {
         const { numero, token } = JSON.parse(saved);
         if (numero && token) {
-          showSession(numero, token);
-          checkQr(numero);
-          // polling de estado para reflejar desvinculaciones
-          startStatusPolling(numero);
+          // Redirigir al dashboard si hay sesión válida
+          window.location.href = '/dashboard.html';
         }
       } catch (_) {}
     })();
 
     logoutBtn.onclick = function() {
       localStorage.removeItem('wa_session');
-      // Reset UI
-      sessionDiv.style.display = 'none';
-      tokenDiv.style.display = 'none';
-      qrDiv.style.display = 'none';
-      loginForm.style.display = 'block';
-      msgDiv.style.display = 'none';
+      // Redirigir al login
+      window.location.href = '/login.html';
     };
 
     loginForm.onsubmit = async function(e) {
@@ -160,14 +156,14 @@
         if (!data.token) throw new Error('Sin token en login');
 
         localStorage.setItem('wa_session', JSON.stringify({ numero, token: data.token }));
-        showSession(numero, data.token);
-        await checkQr(numero);
-        startStatusPolling(numero);
+        // Redirigir al dashboard después del login exitoso
+        window.location.href = '/dashboard.html';
       } catch (err) {
         showError(err.message || err);
       }
 
-      function startStatusPolling(numero) {
+      // Función removida - ya no se necesita
+      function startStatusPolling_OLD(numero) {
         if (window._statusTimer) clearInterval(window._statusTimer);
         window._statusTimer = setInterval(async () => {
           try {

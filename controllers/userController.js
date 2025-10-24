@@ -2,9 +2,11 @@ const crypto = require('crypto');
 const db = require('../db');
 
 exports.register = (req, res) => {
-  const { numero, password } = req.body;
+  const { numero, password, name } = req.body;
   if (!numero || !password) return res.status(400).json({ error: 'Faltan datos' });
   const token = crypto.randomBytes(32).toString('hex');
+  const deviceName = name || 'Dispositivo';
+  
   db.query(
     'INSERT INTO usuarios (numero, password, token) VALUES (?, ?, ?)',
     [numero, password, token],
@@ -21,13 +23,13 @@ exports.register = (req, res) => {
               [numero],
               (selErr, rows) => {
                 if (selErr || rows.length === 0) return res.status(500).json({ error: 'Error de base de datos' });
-                return res.json({ token: rows[0].token });
+                return res.json({ token: rows[0].token, name: deviceName });
               }
             );
           }
         );
       }
-      res.json({ token });
+      res.json({ token, name: deviceName });
     }
   );
 };

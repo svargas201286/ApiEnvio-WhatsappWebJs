@@ -2,11 +2,15 @@ const { MessageMedia, Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 const fs = require('fs');
 const db = require('../db');
+const deviceController = require('./deviceController');
 
 let clients = {};
 
 // Exportar clients para monitoreo
 module.exports.clients = clients;
+
+// Exportar ensureClient para uso externo
+module.exports.ensureClient = ensureClient;
 
 // Función para guardar estado de conexiones
 function saveConnectionsState() {
@@ -91,9 +95,21 @@ function getChromePath() {
   return undefined;
 }
 
-function ensureClient(numero) {
+async function ensureClient(numero) {
   if (!clients[numero]) {
     console.log(`🔧 Creando cliente para número: ${numero}`);
+    
+    // Crear dispositivo en la base de datos
+    try {
+      await deviceController.createOrUpdateDevice(numero, {
+        nombre: 'Dispositivo',
+        estado: 'conectando',
+        instancia_id: btoa(numero)
+      });
+    } catch (error) {
+      console.error('Error al crear dispositivo en BD:', error);
+    }
+    
     const executablePath = getChromePath();
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: numero }),
@@ -143,26 +159,43 @@ function ensureClient(numero) {
         clients[numero].qr = await qrcode.toDataURL(qr);
         clients[numero].state = 'QR';
         clients[numero].lastQrAt = Date.now();
+        
+        // Actualizar QR en la base de datos
+        await deviceController.updateQRCode(numero, clients[numero].qr);
       } catch (_) {
         clients[numero].qr = null;
       }
     });
 
-    client.on('ready', () => {
+    client.on('ready', async () => {
       console.log(`✅ Cliente ${numero} conectado exitosamente a WhatsApp`);
       clients[numero].ready = true;
       clients[numero].state = 'CONNECTED';
       clients[numero].qr = null; // limpiar QR cuando ya está lista
       clients[numero].connectedAt = Date.now(); // Marcar tiempo de conexión
+      
+      // Actualizar estado en la base de datos
+      try {
+        await deviceController.updateDeviceStatus(numero, 'conectado');
+      } catch (error) {
+        console.error('Error al actualizar estado en BD:', error);
+      }
     });
 
-    client.on('disconnected', (reason) => {
+    client.on('disconnected', async (reason) => {
       console.log(`⚠️ Cliente ${numero} desconectado:`, reason);
       // si se cierra sesión en el móvil o se desvincula, marcamos no listo
       clients[numero].ready = false;
       clients[numero].state = 'DISCONNECTED';
       clients[numero].qr = null;
       clients[numero].disconnectedAt = Date.now();
+      
+      // Actualizar estado en la base de datos
+      try {
+        await deviceController.updateDeviceStatus(numero, 'desconectado');
+      } catch (error) {
+        console.error('Error al actualizar estado en BD:', error);
+      }
       
       // Intentar reconectar automáticamente después de 5 segundos
       setTimeout(() => {
@@ -336,27 +369,151 @@ exports.getStatus = (req, res) => {
 };
 
 // Nuevo endpoint para obtener estado de todas las conexiones
-exports.getAllConnections = (req, res) => {
+exports.getAllConnections = async (req, res) => {
   try {
+    // Obtener dispositivos de la base de datos
+    const devices = await deviceController.getAllDevices();
+    
     const connections = {};
-    for (const [numero, clientData] of Object.entries(clients)) {
-      connections[numero] = {
-        ready: clientData.ready,
-        state: clientData.state,
-        hasQr: !!clientData.qr,
-        connectedAt: clientData.connectedAt,
-        disconnectedAt: clientData.disconnectedAt,
-        lastSeen: Date.now()
+    devices.forEach(device => {
+      const clientData = clients[device.numero] || {};
+      connections[device.numero] = {
+        number: device.numero,
+        name: device.nombre,
+        ready: device.estado === 'conectado',
+        state: device.estado,
+        hasQr: !!device.qr_code,
+        connectedAt: device.fecha_conexion,
+        disconnectedAt: device.fecha_desconexion,
+        lastSeen: device.ultima_actividad,
+        instancia_id: device.instancia_id,
+        createdAt: device.created_at
       };
-    }
+    });
     
     res.json({
-      totalClients: Object.keys(clients).length,
-      connectedClients: Object.values(clients).filter(c => c.ready).length,
+      totalClients: devices.length,
+      connectedClients: devices.filter(d => d.estado === 'conectado').length,
       connections
     });
   } catch (error) {
     console.error('Error en getAllConnections:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+// Agregar nuevo dispositivo
+exports.addDevice = async (req, res) => {
+  try {
+    const { numero, nombre, password } = req.body;
+    
+    if (!numero || !password) {
+      return res.status(400).json({ error: 'Número y contraseña son requeridos' });
+    }
+
+    // Crear dispositivo en la base de datos
+    await deviceController.createOrUpdateDevice(numero, {
+      nombre: nombre || 'Dispositivo',
+      estado: 'conectando',
+      instancia_id: btoa(numero)
+    });
+
+    // Inicializar cliente de WhatsApp
+    await ensureClient(numero);
+
+    res.json({ 
+      success: true, 
+      message: `Dispositivo ${numero} agregado correctamente`,
+      numero: numero,
+      nombre: nombre || 'Dispositivo'
+    });
+  } catch (error) {
+    console.error('Error en addDevice:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+// Enviar mensaje de texto
+exports.sendMessage = (req, res) => {
+  try {
+    const { token } = req;
+    const { number, message, fromNumber } = req.body;
+    
+    console.log(`Intentando enviar mensaje a ${number} desde token ${token?.substring(0, 8)}...`);
+    
+    if (!number || !message) {
+      return res.status(400).json({ error: 'Faltan datos' });
+    }
+    
+    db.query('SELECT numero FROM usuarios WHERE token = ?', [token], (err, results) => {
+      if (err) {
+        console.error('Error en consulta de base de datos:', err);
+        return res.status(500).json({ error: 'Error de base de datos' });
+      }
+      
+      if (results.length === 0) {
+        console.log('Token inválido:', token?.substring(0, 8));
+        return res.status(401).json({ error: 'Token inválido' });
+      }
+      
+      // Usar el número especificado o el del usuario por defecto
+      const numeroOrigen = fromNumber || results[0].numero;
+      console.log(`Enviando desde: ${numeroOrigen}`);
+      
+      if (!clients[numeroOrigen] || !clients[numeroOrigen].ready) {
+        console.log(`Cliente ${numeroOrigen} no está listo. Estado:`, clients[numeroOrigen]?.state);
+        return res.status(400).json({ error: `Sesión de WhatsApp ${numeroOrigen} no lista` });
+      }
+      
+      console.log(`Enviando mensaje a ${number}@c.us desde ${numeroOrigen}`);
+      clients[numeroOrigen].client.sendMessage(`${number}@c.us`, message)
+        .then(() => {
+          console.log(`Mensaje enviado exitosamente a ${number} desde ${numeroOrigen}`);
+          res.json({ success: true, from: numeroOrigen });
+        })
+        .catch(err => {
+          console.error(`Error al enviar mensaje a ${number}:`, err);
+          res.status(500).json({ error: err.message });
+        });
+    });
+  } catch (error) {
+    console.error('Error en sendMessage:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+};
+
+// Desconectar dispositivo
+exports.disconnectDevice = async (req, res) => {
+  try {
+    const { numero } = req.query;
+    
+    if (!numero) {
+      return res.status(400).json({ error: 'Número de dispositivo requerido' });
+    }
+
+    const client = clients[numero];
+    if (!client) {
+      return res.status(404).json({ error: 'Dispositivo no encontrado' });
+    }
+
+    if (client.ready) {
+      // Desconectar el cliente de WhatsApp
+      await client.destroy();
+      delete clients[numero];
+      
+      // Actualizar estado en la base de datos
+      await deviceController.updateDeviceStatus(numero, 'desconectado');
+      
+      console.log(`Dispositivo ${numero} desconectado correctamente`);
+      res.json({ 
+        success: true, 
+        message: `Dispositivo ${numero} desconectado correctamente` 
+      });
+    } else {
+      res.status(400).json({ error: 'El dispositivo no está conectado' });
+    }
+  } catch (error) {
+    console.error('Error en disconnectDevice:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
