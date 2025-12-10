@@ -382,58 +382,118 @@ exports.getQr = async (req, res) => {
 
 exports.sendDocument = (req, res) => {
   try {
-    const { token } = req;
-    const { number, mediatype, media, filename, caption } = req.body;
+    const { number, mediatype, media, filename, caption, fromNumber } = req.body;
 
-    console.log(`Intentando enviar documento a ${number} desde token ${token?.substring(0, 8)}...`);
+    console.log('📥 Recibiendo solicitud de envío de documento');
+    console.log('Datos recibidos:', {
+      number,
+      mediatype,
+      filename,
+      caption: caption?.substring(0, 50) + '...',
+      fromNumber,
+      mediaLength: media?.length
+    });
 
-    if (!number || !mediatype || !media || !filename) {
+    // Validar datos requeridos
+    if (!number || !media || !filename) {
+      console.log('❌ Faltan datos requeridos');
       return res.status(400).json({ error: 'Faltan datos' });
     }
 
-    db.query('SELECT numero FROM usuarios WHERE token = ?', [token], (err, results) => {
-      if (err) {
-        console.error('Error en consulta de base de datos:', err);
-        return res.status(500).json({ error: 'Error de base de datos' });
+    // Determinar el número de origen
+    let numeroOrigen = fromNumber;
+
+    // Si fromNumber viene en formato base64 (INSTANCIA), decodificarlo
+    if (fromNumber && fromNumber.length < 20) {
+      try {
+        const decoded = Buffer.from(fromNumber, 'base64').toString('utf-8');
+        console.log(`🔓 Instancia decodificada: ${fromNumber} -> ${decoded}`);
+        numeroOrigen = decoded;
+      } catch (e) {
+        console.log('⚠️ No se pudo decodificar la instancia, usando como está:', fromNumber);
+      }
+    }
+
+    // Si no hay fromNumber, usar el token para identificar al usuario
+    if (!numeroOrigen) {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) {
+        console.log('❌ No se proporcionó token de autorización');
+        return res.status(401).json({ error: 'Token requerido' });
       }
 
-      if (results.length === 0) {
-        console.log('Token inválido:', token?.substring(0, 8));
-        return res.status(401).json({ error: 'Token inválido' });
-      }
+      // Buscar usuario por token
+      db.query('SELECT numero FROM usuarios WHERE token = ?', [token], (err, results) => {
+        if (err || results.length === 0) {
+          console.log('❌ Token inválido');
+          return res.status(401).json({ error: 'Token inválido' });
+        }
+        numeroOrigen = results[0].numero;
+        procesarEnvio(numeroOrigen);
+      });
+    } else {
+      procesarEnvio(numeroOrigen);
+    }
 
-      const numeroUsuario = results[0].numero;
-      console.log(`Usuario encontrado: ${numeroUsuario}`);
+    async function procesarEnvio(numeroDispositivo) {
+      console.log(`📱 Usando dispositivo: ${numeroDispositivo}`);
 
-      if (!clients[numeroUsuario] || !clients[numeroUsuario].ready) {
-        console.log(`Cliente ${numeroUsuario} no está listo.Estado: `, clients[numeroUsuario]?.state);
-        return res.status(400).json({ error: 'Sesión de WhatsApp no lista' });
+      if (!clients[numeroDispositivo] || !clients[numeroDispositivo].ready) {
+        console.log(`❌ Cliente ${numeroDispositivo} no está listo. Estado:`, clients[numeroDispositivo]?.state);
+        return res.status(400).json({
+          error: 'Sesión de WhatsApp no lista',
+          device: numeroDispositivo,
+          state: clients[numeroDispositivo]?.state || 'NONE'
+        });
       }
 
       try {
+        // Verificar que el número existe en WhatsApp
+        const numberId = `${number}@c.us`;
+
+        try {
+          const isRegistered = await clients[numeroDispositivo].client.isRegisteredUser(numberId);
+          if (!isRegistered) {
+            console.log(`❌ El número ${number} no está registrado en WhatsApp`);
+            return res.status(400).json({
+              error: 'Número no registrado en WhatsApp',
+              number: number
+            });
+          }
+        } catch (checkError) {
+          console.log(`⚠️ No se pudo verificar el número, continuando de todos modos:`, checkError.message);
+        }
+
         const messageMedia = new MessageMedia(
           mediatype === 'document' ? 'application/pdf' : mediatype,
           media,
           filename
         );
 
-        console.log(`Enviando mensaje a ${number}@c.us`);
-        clients[numeroUsuario].client.sendMessage(`${number}@c.us`, messageMedia, { caption })
+        console.log(`📤 Enviando ${mediatype} desde ${numeroDispositivo} a ${number}`);
+
+        clients[numeroDispositivo].client.sendMessage(numberId, messageMedia, { caption })
           .then(() => {
-            console.log(`Mensaje enviado exitosamente a ${number}`);
-            res.json({ success: true });
+            console.log(`✅ Documento enviado exitosamente a ${number}`);
+            res.json({
+              success: true,
+              succes: true, // Para compatibilidad con código antiguo
+              from: numeroDispositivo,
+              to: number,
+              filename
+            });
           })
           .catch(err => {
-            console.error(`Error al enviar mensaje a ${number}: `, err);
+            console.error(`❌ Error al enviar documento a ${number}:`, err);
             res.status(500).json({ error: err.message });
           });
       } catch (err) {
-        console.error('Error al crear MessageMedia:', err);
+        console.error('❌ Error al crear MessageMedia:', err);
         res.status(500).json({ error: err.message });
       }
-    });
+    }
   } catch (error) {
-    console.error('Error en sendDocument:', error);
+    console.error('❌ Error en sendDocument:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
@@ -612,3 +672,6 @@ exports.disconnectDevice = async (req, res) => {
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 };
+
+// Exportar función para acceder a los clientes desde otros controladores
+exports.getClients = () => clients;
