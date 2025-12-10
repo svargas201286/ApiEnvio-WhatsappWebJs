@@ -727,9 +727,12 @@
         </div>
     </div>
 
+    <!-- Socket.IO Client -->
+    <script src="/socket.io/socket.io.js"></script>
     <script>
         let sessionData = null;
         let uptimeInterval = null;
+        let socket = null;
 
         // Verificar sesión existente
         function checkExistingSession() {
@@ -740,10 +743,33 @@
                 startUptimeCounter();
                 // Cargar dispositivos al inicializar
                 refreshDevices();
+                
+                // Inicializar WebSocket
+                initializeWebSocket();
             } else {
                 // Redirigir al login si no hay sesión
                 window.location.href = '/login.html';
             }
+        }
+
+        // Inicializar WebSocket
+        function initializeWebSocket() {
+            socket = io();
+            
+            socket.on('connect', () => {
+                console.log('✅ Conectado al servidor WebSocket');
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('❌ Desconectado del servidor WebSocket');
+            });
+            
+            // Escuchar cambios de estado de dispositivos
+            socket.on('deviceStatusChanged', (data) => {
+                console.log('📱 Estado de dispositivo actualizado:', data);
+                // Actualizar la lista de dispositivos cuando hay cambios
+                refreshDevices();
+            });
         }
 
         // Mostrar sección
@@ -1243,6 +1269,7 @@
             localStorage.removeItem('wa_session');
             sessionData = null;
             if (uptimeInterval) clearInterval(uptimeInterval);
+            if (socket) socket.disconnect();
             window.location.href = '/login.html';
         }
 

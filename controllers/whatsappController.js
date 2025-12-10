@@ -24,7 +24,7 @@ function saveConnectionsState() {
       };
     }
   }
-  
+
   try {
     fs.writeFileSync('./whatsapp-sessions.json', JSON.stringify(state, null, 2));
     console.log('💾 Estado de sesiones guardado');
@@ -58,7 +58,7 @@ const savedState = loadConnectionsState();
 function cleanupUnconnectedClients() {
   const now = Date.now();
   const maxUnconnectedTime = 60 * 60 * 1000; // 1 hora para clientes que nunca se conectaron
-  
+
   for (const [numero, clientData] of Object.entries(clients)) {
     // Solo limpiar si nunca se conectó y lleva mucho tiempo
     if (!clientData.ready && !clientData.qr) {
@@ -90,7 +90,7 @@ function getChromePath() {
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
   ];
   for (const p of candidates) {
-    try { if (fs.existsSync(p)) return p; } catch (_) {}
+    try { if (fs.existsSync(p)) return p; } catch (_) { }
   }
   return undefined;
 }
@@ -98,7 +98,7 @@ function getChromePath() {
 async function ensureClient(numero) {
   if (!clients[numero]) {
     console.log(`🔧 Creando cliente para número: ${numero}`);
-    
+
     // Crear dispositivo en la base de datos
     try {
       await deviceController.createOrUpdateDevice(numero, {
@@ -109,10 +109,20 @@ async function ensureClient(numero) {
     } catch (error) {
       console.error('Error al crear dispositivo en BD:', error);
     }
-    
+
     const executablePath = getChromePath();
     const client = new Client({
-      authStrategy: new LocalAuth({ clientId: numero }),
+      authStrategy: new LocalAuth({
+        clientId: numero,
+        dataPath: './.wwebjs_auth'
+      }),
+      restartOnAuthFail: true,
+      takeoverOnConflict: true,
+      takeoverTimeoutMs: 0,
+      webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+      },
       puppeteer: {
         args: [
           '--no-sandbox',
@@ -139,16 +149,16 @@ async function ensureClient(numero) {
         ],
         headless: true,
         executablePath,
-        timeout: 60000,
-        protocolTimeout: 60000
+        timeout: 0, // Disable timeout
+        protocolTimeout: 0 // Disable protocol timeout
       }
     });
-    clients[numero] = { 
-      client, 
-      qr: null, 
-      ready: false, 
-      state: 'INIT', 
-      initializedAt: Date.now(), 
+    clients[numero] = {
+      client,
+      qr: null,
+      ready: false,
+      state: 'INIT',
+      initializedAt: Date.now(),
       lastQrAt: 0,
       connectedAt: null,
       disconnectedAt: null
@@ -159,7 +169,7 @@ async function ensureClient(numero) {
         clients[numero].qr = await qrcode.toDataURL(qr);
         clients[numero].state = 'QR';
         clients[numero].lastQrAt = Date.now();
-        
+
         // Actualizar QR en la base de datos
         await deviceController.updateQRCode(numero, clients[numero].qr);
       } catch (_) {
@@ -168,56 +178,141 @@ async function ensureClient(numero) {
     });
 
     client.on('ready', async () => {
-      console.log(`✅ Cliente ${numero} conectado exitosamente a WhatsApp`);
-      clients[numero].ready = true;
-      clients[numero].state = 'CONNECTED';
-      clients[numero].qr = null; // limpiar QR cuando ya está lista
-      clients[numero].connectedAt = Date.now(); // Marcar tiempo de conexión
-      
-      // Actualizar estado en la base de datos
-      try {
-        await deviceController.updateDeviceStatus(numero, 'conectado');
-      } catch (error) {
-        console.error('Error al actualizar estado en BD:', error);
+      // Evitar múltiples eventos ready consecutivos (debouncing)
+      if (clients[numero].readyDebounce) {
+        clearTimeout(clients[numero].readyDebounce);
       }
+
+      clients[numero].readyDebounce = setTimeout(async () => {
+        console.log(`✅ Cliente ${numero} conectado exitosamente a WhatsApp`);
+        clients[numero].ready = true;
+        clients[numero].state = 'CONNECTED';
+        clients[numero].qr = null;
+        clients[numero].connectedAt = Date.now();
+        clients[numero].readyCount = (clients[numero].readyCount || 0) + 1;
+
+        // Actualizar estado en la base de datos
+        try {
+          await deviceController.updateDeviceStatus(numero, 'conectado');
+        } catch (error) {
+          console.error('Error al actualizar estado en BD:', error);
+        }
+
+        // Emitir evento de Socket.IO para actualización en tiempo real
+        try {
+          const mainModule = require('../main');
+          if (mainModule.io) {
+            mainModule.io.emit('deviceStatusChanged', {
+              numero,
+              status: 'conectado',
+              ready: true,
+              timestamp: new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          console.error('Error al emitir evento Socket.IO:', error);
+        }
+      }, 1000); // Esperar 1 segundo antes de procesar el evento ready
     });
 
     client.on('disconnected', async (reason) => {
-      console.log(`⚠️ Cliente ${numero} desconectado:`, reason);
-      // si se cierra sesión en el móvil o se desvincula, marcamos no listo
+      console.log(`⚠️ Cliente ${numero} desconectado: `, reason);
+
+      // Update local state
+      const wasReady = clients[numero].ready;
       clients[numero].ready = false;
       clients[numero].state = 'DISCONNECTED';
       clients[numero].qr = null;
       clients[numero].disconnectedAt = Date.now();
-      
-      // Actualizar estado en la base de datos
+
+      // Update database status
       try {
         await deviceController.updateDeviceStatus(numero, 'desconectado');
       } catch (error) {
         console.error('Error al actualizar estado en BD:', error);
       }
-      
-      // Intentar reconectar automáticamente después de 5 segundos
-      setTimeout(() => {
-        if (clients[numero] && !clients[numero].ready) {
-          console.log(`🔄 Intentando reconectar cliente ${numero}...`);
-          try {
-            clients[numero].state = 'RECONNECTING';
-            clients[numero].client.initialize().catch((error) => {
-              console.error(`Error al reconectar cliente ${numero}:`, error);
-            });
-          } catch (error) {
-            console.error(`Error en reconexión de cliente ${numero}:`, error);
-          }
+
+      // Emitir evento de Socket.IO
+      try {
+        const mainModule = require('../main');
+        if (mainModule.io) {
+          mainModule.io.emit('deviceStatusChanged', {
+            numero,
+            status: 'desconectado',
+            ready: false,
+            reason,
+            timestamp: new Date().toISOString()
+          });
         }
-      }, 5000);
+      } catch (error) {
+        console.error('Error al emitir evento Socket.IO:', error);
+      }
+
+      // Check if disconnection was intentional (Logout) or if we should reconnect
+      const intentionalDisconnects = ['LOGOUT', 'USER_LOGOUT', 'CLIENT_LOGOUT'];
+
+      // Calcular tiempo desde la última conexión
+      const timeSinceConnection = clients[numero].connectedAt
+        ? Date.now() - clients[numero].connectedAt
+        : 0;
+
+      // Si el LOGOUT ocurre menos de 30 segundos después de conectarse, probablemente es un falso LOGOUT
+      const isFalseLogout = reason === 'LOGOUT' && timeSinceConnection < 30000;
+
+      const isIntentional = !isFalseLogout && (
+        intentionalDisconnects.includes(reason) ||
+        (typeof reason === 'string' && reason.includes('LOGOUT'))
+      );
+
+      if (isIntentional) {
+        console.log(`🔌 Desconexión intencional o cierre de sesión para ${numero}. No se intentará reconectar.`);
+        // Solo destruir el cliente si fue una desconexión intencional
+        try {
+          if (clients[numero].client) {
+            await clients[numero].client.destroy();
+          }
+        } catch (e) {
+          console.error('Error destroying client:', e);
+        }
+
+      } else {
+        // Attempt to reconnect automatically for network errors or temporary issues
+        const reconnectReason = isFalseLogout ? 'Falso LOGOUT detectado' : reason;
+        console.log(`🔄 Desconexión no intencional(${reconnectReason}).Intentando reconectar en 5s...`);
+
+        // NO destruir el cliente, solo reinicializar
+        setTimeout(() => {
+          if (clients[numero] && !clients[numero].ready) {
+            console.log(`🔄 Intentando reconectar cliente ${numero}...`);
+            try {
+              clients[numero].state = 'RECONNECTING';
+              // Reinicializar sin destruir primero
+              clients[numero].client.initialize().catch((error) => {
+                console.error(`Error al reconectar cliente ${numero}: `, error);
+              });
+            } catch (error) {
+              console.error(`Error en reconexión de cliente ${numero}: `, error);
+            }
+          }
+        }, 5000);
+      }
     });
 
-    client.on('auth_failure', (msg) => {
-      console.log(`Error de autenticación para ${numero}:`, msg);
+    client.on('auth_failure', async (msg) => {
+      console.log(`Error de autenticación para ${numero}: `, msg);
       clients[numero].ready = false;
       clients[numero].state = 'AUTH_FAILURE';
       clients[numero].qr = null;
+
+      try {
+        await deviceController.updateDeviceStatus(numero, 'desconectado');
+        // If auth fails, we should probably destroy the client so it can be re-initialized properly with a new QR later
+        if (clients[numero].client) {
+          await clients[numero].client.destroy();
+        }
+      } catch (error) {
+        console.error('Error al actualizar estado tras fallo de auth:', error);
+      }
     });
 
     client.on('loading_screen', (percent, message) => {
@@ -225,13 +320,13 @@ async function ensureClient(numero) {
     });
 
     client.on('change_state', (state) => {
-      console.log(`Cliente ${numero} cambió estado a:`, state);
+      console.log(`Cliente ${numero} cambió estado a: `, state);
       clients[numero].state = String(state || 'UNKNOWN');
     });
 
     // Agregar manejo de errores durante la inicialización
     client.initialize().catch((error) => {
-      console.error(`Error al inicializar cliente ${numero}:`, error);
+      console.error(`Error al inicializar cliente ${numero}: `, error);
       clients[numero].state = 'ERROR';
       clients[numero].ready = false;
     });
@@ -242,10 +337,10 @@ exports.getQr = async (req, res) => {
   try {
     const numero = req.query.numero;
     if (!numero) return res.status(400).json({ error: 'Falta el número' });
-    
+
     console.log(`Solicitando QR para número: ${numero}`);
     ensureClient(numero);
-    
+
     // Si existe pero está desconectado y no hay QR, intenta re-inicializar una sola vez
     const state = clients[numero];
     if (state && !state.ready && !state.qr && state.state !== 'INIT') {
@@ -253,30 +348,30 @@ exports.getQr = async (req, res) => {
         console.log(`Reinicializando cliente ${numero}`);
         state.state = 'INIT';
         state.client.initialize().catch((error) => {
-          console.error(`Error al reinicializar cliente ${numero}:`, error);
+          console.error(`Error al reinicializar cliente ${numero}: `, error);
         });
         state.initializedAt = Date.now();
       } catch (error) {
-        console.error(`Error en reinicialización de cliente ${numero}:`, error);
+        console.error(`Error en reinicialización de cliente ${numero}: `, error);
       }
     }
-    
+
     // Solo reiniciar si nunca se conectó y lleva mucho tiempo
     if (state && !state.ready && !state.qr && !state.connectedAt) {
       const now = Date.now();
       const elapsed = now - (state.initializedAt || now);
       if (elapsed > 60000) { // Aumentado a 60 segundos
-        console.log(`Forzando reinicio del cliente ${numero} después de ${elapsed}ms (nunca se conectó)`);
+        console.log(`Forzando reinicio del cliente ${numero} después de ${elapsed}ms(nunca se conectó)`);
         try {
           await state.client.destroy();
         } catch (error) {
-          console.error(`Error al destruir cliente ${numero}:`, error);
+          console.error(`Error al destruir cliente ${numero}: `, error);
         }
         delete clients[numero];
         ensureClient(numero);
       }
     }
-    
+
     // Responder siempre estado actual; el frontend puede hacer polling
     res.json({ qr: state.qr, ready: state.ready, state: state.state });
   } catch (error) {
@@ -289,39 +384,39 @@ exports.sendDocument = (req, res) => {
   try {
     const { token } = req;
     const { number, mediatype, media, filename, caption } = req.body;
-    
+
     console.log(`Intentando enviar documento a ${number} desde token ${token?.substring(0, 8)}...`);
-    
+
     if (!number || !mediatype || !media || !filename) {
       return res.status(400).json({ error: 'Faltan datos' });
     }
-    
+
     db.query('SELECT numero FROM usuarios WHERE token = ?', [token], (err, results) => {
       if (err) {
         console.error('Error en consulta de base de datos:', err);
         return res.status(500).json({ error: 'Error de base de datos' });
       }
-      
+
       if (results.length === 0) {
         console.log('Token inválido:', token?.substring(0, 8));
         return res.status(401).json({ error: 'Token inválido' });
       }
-      
+
       const numeroUsuario = results[0].numero;
       console.log(`Usuario encontrado: ${numeroUsuario}`);
-      
+
       if (!clients[numeroUsuario] || !clients[numeroUsuario].ready) {
-        console.log(`Cliente ${numeroUsuario} no está listo. Estado:`, clients[numeroUsuario]?.state);
+        console.log(`Cliente ${numeroUsuario} no está listo.Estado: `, clients[numeroUsuario]?.state);
         return res.status(400).json({ error: 'Sesión de WhatsApp no lista' });
       }
-      
+
       try {
         const messageMedia = new MessageMedia(
           mediatype === 'document' ? 'application/pdf' : mediatype,
           media,
           filename
         );
-        
+
         console.log(`Enviando mensaje a ${number}@c.us`);
         clients[numeroUsuario].client.sendMessage(`${number}@c.us`, messageMedia, { caption })
           .then(() => {
@@ -329,7 +424,7 @@ exports.sendDocument = (req, res) => {
             res.json({ success: true });
           })
           .catch(err => {
-            console.error(`Error al enviar mensaje a ${number}:`, err);
+            console.error(`Error al enviar mensaje a ${number}: `, err);
             res.status(500).json({ error: err.message });
           });
       } catch (err) {
@@ -347,17 +442,17 @@ exports.getStatus = (req, res) => {
   try {
     const numero = req.query.numero;
     if (!numero) return res.status(400).json({ error: 'Falta el número' });
-    
+
     const state = clients[numero];
     if (!state) {
       console.log(`Estado solicitado para número ${numero}: NONE`);
       return res.json({ ready: false, hasQr: false, state: 'NONE' });
     }
-    
-    console.log(`Estado de ${numero}: ready=${state.ready}, hasQr=${!!state.qr}, state=${state.state}`);
-    res.json({ 
-      ready: !!state.ready, 
-      hasQr: !!state.qr, 
+
+    console.log(`Estado de ${numero}: ready = ${state.ready}, hasQr = ${!!state.qr}, state = ${state.state}`);
+    res.json({
+      ready: !!state.ready,
+      hasQr: !!state.qr,
       state: state.state || 'UNKNOWN',
       connectedAt: state.connectedAt,
       disconnectedAt: state.disconnectedAt
@@ -373,7 +468,7 @@ exports.getAllConnections = async (req, res) => {
   try {
     // Obtener dispositivos de la base de datos
     const devices = await deviceController.getAllDevices();
-    
+
     const connections = {};
     devices.forEach(device => {
       const clientData = clients[device.numero] || {};
@@ -390,7 +485,7 @@ exports.getAllConnections = async (req, res) => {
         createdAt: device.created_at
       };
     });
-    
+
     res.json({
       totalClients: devices.length,
       connectedClients: devices.filter(d => d.estado === 'conectado').length,
@@ -406,7 +501,7 @@ exports.getAllConnections = async (req, res) => {
 exports.addDevice = async (req, res) => {
   try {
     const { numero, nombre, password } = req.body;
-    
+
     if (!numero || !password) {
       return res.status(400).json({ error: 'Número y contraseña son requeridos' });
     }
@@ -421,8 +516,8 @@ exports.addDevice = async (req, res) => {
     // Inicializar cliente de WhatsApp
     await ensureClient(numero);
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `Dispositivo ${numero} agregado correctamente`,
       numero: numero,
       nombre: nombre || 'Dispositivo'
@@ -438,33 +533,33 @@ exports.sendMessage = (req, res) => {
   try {
     const { token } = req;
     const { number, message, fromNumber } = req.body;
-    
+
     console.log(`Intentando enviar mensaje a ${number} desde token ${token?.substring(0, 8)}...`);
-    
+
     if (!number || !message) {
       return res.status(400).json({ error: 'Faltan datos' });
     }
-    
+
     db.query('SELECT numero FROM usuarios WHERE token = ?', [token], (err, results) => {
       if (err) {
         console.error('Error en consulta de base de datos:', err);
         return res.status(500).json({ error: 'Error de base de datos' });
       }
-      
+
       if (results.length === 0) {
         console.log('Token inválido:', token?.substring(0, 8));
         return res.status(401).json({ error: 'Token inválido' });
       }
-      
+
       // Usar el número especificado o el del usuario por defecto
       const numeroOrigen = fromNumber || results[0].numero;
       console.log(`Enviando desde: ${numeroOrigen}`);
-      
+
       if (!clients[numeroOrigen] || !clients[numeroOrigen].ready) {
-        console.log(`Cliente ${numeroOrigen} no está listo. Estado:`, clients[numeroOrigen]?.state);
+        console.log(`Cliente ${numeroOrigen} no está listo.Estado: `, clients[numeroOrigen]?.state);
         return res.status(400).json({ error: `Sesión de WhatsApp ${numeroOrigen} no lista` });
       }
-      
+
       console.log(`Enviando mensaje a ${number}@c.us desde ${numeroOrigen}`);
       clients[numeroOrigen].client.sendMessage(`${number}@c.us`, message)
         .then(() => {
@@ -472,7 +567,7 @@ exports.sendMessage = (req, res) => {
           res.json({ success: true, from: numeroOrigen });
         })
         .catch(err => {
-          console.error(`Error al enviar mensaje a ${number}:`, err);
+          console.error(`Error al enviar mensaje a ${number}: `, err);
           res.status(500).json({ error: err.message });
         });
     });
@@ -486,7 +581,7 @@ exports.sendMessage = (req, res) => {
 exports.disconnectDevice = async (req, res) => {
   try {
     const { numero } = req.query;
-    
+
     if (!numero) {
       return res.status(400).json({ error: 'Número de dispositivo requerido' });
     }
@@ -500,14 +595,14 @@ exports.disconnectDevice = async (req, res) => {
       // Desconectar el cliente de WhatsApp
       await client.destroy();
       delete clients[numero];
-      
+
       // Actualizar estado en la base de datos
       await deviceController.updateDeviceStatus(numero, 'desconectado');
-      
+
       console.log(`Dispositivo ${numero} desconectado correctamente`);
-      res.json({ 
-        success: true, 
-        message: `Dispositivo ${numero} desconectado correctamente` 
+      res.json({
+        success: true,
+        message: `Dispositivo ${numero} desconectado correctamente`
       });
     } else {
       res.status(400).json({ error: 'El dispositivo no está conectado' });
