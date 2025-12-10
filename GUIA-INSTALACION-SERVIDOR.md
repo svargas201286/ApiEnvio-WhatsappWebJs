@@ -326,19 +326,23 @@ sudo ufw status
 
 ---
 
-## 🔐 Paso 7: Configurar SSL (Opcional pero Recomendado)
+## 🔐 Paso 7: Configurar Certificado SSL (Gratis)
 
-### En aaPanel
-1. Ve al sitio → **Settings** → **SSL**
-2. Selecciona **Let's Encrypt**
-3. Ingresa tu email
-4. Clic en **Apply**
+**NOTA:** No necesitas instalar ninguna app adicional. aaPanel ya incluye la herramienta gratuita "Let's Encrypt".
 
-O vía SSH:
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d api.tudominio.com
-```
+### 7.1 Activar SSL en aaPanel
+1. En el menú izquierdo, ve a **Website**.
+2. En la lista de tus sitios, haz clic en **Conf** (o en el nombre del dominio).
+3. En la ventana emergente, haz clic en la pestaña **SSL**.
+4. Selecciona **Let's Encrypt** (la opción gratuita).
+5. Verifica que tu dominio esté marcado.
+6. Haz clic en el botón **Apply** (Solicitar).
+   - El sistema verificará el dominio y generará el certificado.
+   - Una vez termine, verás la fecha de expiración y el certificado activado.
+7. (Opcional) Activa el interruptor **"Force HTTPS"** arriba a la derecha para obligar a todos a entrar seguro.
+
+### 7.2 Renovación Automática
+aaPanel configura automáticamente una tarea programada (Cron) para renovar el certificado antes de que expire, así que no tienes que preocuparte por hacerlo manualmente.
 
 ---
 
