@@ -42,22 +42,32 @@ pm2 --version
 ## 📦 Paso 2: Subir el Proyecto al Servidor
 
 ### Opción A: Usando Git (Recomendado)
-```bash
-# Conectar al servidor
-ssh usuario@192.168.18.95
 
-# Ir al directorio web
-cd /www/wwwroot/
+Como el repositorio es **PÚBLICO**, no necesitas iniciar sesión en GitHub. Sin embargo, si usas un usuario que no es root (ej. `samuel`), necesitarás usar `sudo` para los permisos.
 
-# Clonar el repositorio
-git clone https://github.com/svargas201286/ApiEnvio-WhatsappWebJs.git whatsapp-api
+1. **Conectar al servidor:**
+   ```bash
+   ssh tu_usuario@192.168.18.95
+   ```
 
-# Entrar al directorio
-cd whatsapp-api
+2. **Ejecutar comando de instalación limpia:**
+   Este comando borra cualquier versión anterior, descarga la nueva y ajusta los permisos (todo en uno):
+   ```bash
+   cd /www/wwwroot/ && sudo rm -rf whatsapp-api && sudo git clone https://github.com/svargas201286/ApiEnvio-WhatsappWebJs.git whatsapp-api
+   ```
 
-# Instalar dependencias
-npm install --production
-```
+3. **Ajustar permisos de la carpeta (CRÍTICO):**
+   Para poder instalar dependencias y ejecutar sin errores, asigna la carpeta a tu usuario:
+   ```bash
+   # Reemplaza 'tu_usuario' con tu usuario real (ej. samuel)
+   sudo chown -R $USER:$USER /www/wwwroot/whatsapp-api
+   ```
+
+4. **Instalar dependencias:**
+   ```bash
+   cd whatsapp-api
+   npm install --production
+   ```
 
 ### Opción B: Usando FTP/SFTP
 1. Abre **FileZilla** o **WinSCP**
