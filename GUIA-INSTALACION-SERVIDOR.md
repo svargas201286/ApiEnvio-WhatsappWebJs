@@ -119,27 +119,101 @@ Guarda con `Ctrl+O`, Enter, y sal con `Ctrl+X`
 
 ---
 
-## 🚀 Paso 4: Iniciar la Aplicación con PM2
+## 🚀 Paso 4: Iniciar la Aplicación con PM2 (Inicio Automático)
+
+### 4.1 Iniciar con el archivo de configuración
+
+El proyecto incluye un archivo `ecosystem.config.js` que configura PM2 para:
+- ✅ **Reinicio automático** si la aplicación falla
+- ✅ **Reinicio automático** si usa más de 1GB de RAM
+- ✅ **Logs organizados** en la carpeta `logs/`
+- ✅ **Configuración optimizada** para producción
 
 ```bash
 # Asegúrate de estar en el directorio del proyecto
 cd /www/wwwroot/whatsapp-api
 
-# Iniciar la aplicación con PM2
-pm2 start main.js --name whatsapp-api
+# Crear carpeta de logs
+mkdir -p logs
+
+# Iniciar la aplicación con el archivo de configuración
+pm2 start ecosystem.config.js
 
 # Ver el estado
 pm2 status
 
-# Ver los logs
+# Ver los logs en tiempo real
 pm2 logs whatsapp-api
+```
 
-# Guardar la configuración de PM2
+### 4.2 Configurar inicio automático al arrancar el servidor
+
+**IMPORTANTE:** Estos pasos aseguran que tu aplicación se inicie automáticamente cuando el servidor se reinicie.
+
+```bash
+# Guardar la configuración actual de PM2
 pm2 save
 
-# Configurar PM2 para iniciar al arrancar el sistema
+# Generar script de inicio automático
 pm2 startup
-# Ejecuta el comando que PM2 te muestre
+
+# PM2 te mostrará un comando como este (CÓPIALO Y EJECÚTALO):
+# sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u tu_usuario --hp /home/tu_usuario
+
+# Ejecuta el comando que PM2 te muestre (ejemplo):
+sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u www --hp /home/www
+
+# Verificar que se guardó correctamente
+pm2 save
+
+# Verificar que el servicio systemd está activo
+sudo systemctl status pm2-www
+```
+
+### 4.3 Verificar que funciona el inicio automático
+
+```bash
+# Reiniciar el servidor para probar
+sudo reboot
+
+# Después de que el servidor reinicie, conectarse de nuevo y verificar:
+ssh usuario@192.168.18.95
+
+# Verificar que PM2 está corriendo
+pm2 status
+
+# Deberías ver tu aplicación "whatsapp-api" en estado "online"
+```
+
+### 4.4 Comandos útiles de PM2
+
+```bash
+# Ver estado de procesos
+pm2 status
+
+# Ver logs en tiempo real
+pm2 logs whatsapp-api
+
+# Ver logs de errores solamente
+pm2 logs whatsapp-api --err
+
+# Reiniciar aplicación manualmente
+pm2 restart whatsapp-api
+
+# Detener aplicación (se reiniciará automáticamente al reiniciar el servidor)
+pm2 stop whatsapp-api
+
+# Eliminar de PM2 (NO se iniciará automáticamente)
+pm2 delete whatsapp-api
+
+# Ver uso de recursos en tiempo real
+pm2 monit
+
+# Limpiar logs antiguos
+pm2 flush
+
+# Ver información detallada
+pm2 show whatsapp-api
 ```
 
 ---
