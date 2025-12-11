@@ -108,17 +108,21 @@
       }
     }
 
-    // Restaurar sesión si existe - redirigir al dashboard
-    (function restoreSession() {
-      const saved = localStorage.getItem('wa_session');
-      if (!saved) return;
+    // Verificar sesión activa al cargar
+    (function checkSession() {
       try {
-        const { numero, token } = JSON.parse(saved);
-        if (numero && token) {
-          // Redirigir al dashboard si hay sesión válida
-          window.location.href = '/dashboard.html';
+        const saved = localStorage.getItem('wa_session');
+        if (saved) {
+          const { numero, token } = JSON.parse(saved);
+          if (numero && token) {
+            console.log('Sesión encontrada, redirigiendo al dashboard...');
+            window.location.replace('/dashboard.html');
+          }
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error('Error al leer sesión:', e);
+        localStorage.removeItem('wa_session'); // Limpiar si está corrupta
+      }
     })();
 
     logoutBtn.onclick = function() {
