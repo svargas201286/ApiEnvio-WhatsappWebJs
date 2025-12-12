@@ -1,100 +1,159 @@
-# 🌐 Guía Definitiva: Cloudflare Tunnel en aaPanel (Solución a CGNAT)
+# GUÍA MAESTRA: Despliegue de WhatsApp API con Cloudflare Tunnel y aaPanel
 
-Esta guía te permitirá publicar tu API en internet **sin abrir puertos** y **saltándote las restricciones de tu proveedor de internet** (CGNAT). Es la solución más segura y profesional.
-
----
-
-## 📋 Requisitos Previos
-
-1.  Una cuenta gratuita en [Cloudflare](https://dash.cloudflare.com/sign-up).
-2.  Tener tu dominio (`sistemasvargas.com`) agregado y activo en Cloudflare.
-    *   *Si tus DNS están en otro lado (ej. GoDaddy), debes cambiarlos a los que te indique Cloudflare.*
+Esta guía cubre **TODO** el proceso de instalación desde cero, incluyendo la configuración del servidor, la instalación de la aplicación, y la configuración "Híbrida" de Cloudflare para convivir con un hosting antiguo.
 
 ---
 
-## 🚀 Paso 1: Crear el Túnel en Cloudflare
+## 🏗️ Requisitos Previos
 
-1.  Entra al **[Dashboard de Cloudflare Zero Trust](https://one.dash.cloudflare.com/)**.
-    *   Si es la primera vez, te pedirá elegir un plan: selecciona el **Free (Gratis)**.
-    *   Te pedirá una tarjeta, pero **NO TE COBRARÁN NADA** (es requisito para verificar la cuenta).
-2.  En el menú izquierdo, ve a **Networks** > **Tunnels**.
-3.  Haz clic en el botón azul **Create a tunnel**.
-4.  Selecciona **Cloudflared** (Connector).
-5.  Ponle un nombre, por ejemplo: `Servidor-aaPanel` y guarda.
+- **Servidor:** PC/Servidor con aaPanel instalado (IP Local: `192.168.18.95`).
+- **Dominio:** `sistemasvargas.com` (Gestionado en Cloudflare).
+- **Hosting Antiguo:** cPanel/Migracem con IP `65.181.111.156`.
+- **Objetivo:** Que `apienviocomprobante.sistemasvargas.com` vaya al servidor casa, y todo lo demás (`dulcealba`, etc.) siga en el hosting viejo.
 
 ---
 
-## 💻 Paso 2: Instalar el Conector en aaPanel
+## 🛠️ FASE 1: Preparación del Servidor (aaPanel)
 
-Una vez guardado el nombre, Cloudflare te mostrará una pantalla con comandos de instalación.
+Antes de nada, necesitamos el entorno listo en tu servidor.
 
-1.  Busca la sección que dice **"Install and run a connector"**.
-2.  Haz clic en el icono de **Debian** (generalmente aaPanel corre en Debian/Ubuntu) o **Red Hat** (si usas CentOS).
-    *   *Si no sabes cuál usar, prueba primero con Debian (64-bit).*
-3.  **COPIA** el comando largo que aparece en el cuadro negro (empieza con `curl -L ...`).
+### 1. Instalar Node.js y PM2
+En la terminal de aaPanel o vía SSH:
 
-### En tu aaPanel:
-1.  Abre aaPanel y ve al menú **Terminal**.
-2.  Loguéate como `root` (o usa `sudo` si entras como usuario normal).
-3.  **PEGA** el comando que copiaste de Cloudflare y dale Enter.
-
-El servidor descargará e instalará el servicio. Si todo sale bien, en la web de Cloudflare verás que el apartado "Connectors" cambia a estado **Connected** (verde). Haz clic en **Next**.
-
----
-
-## 🔗 Paso 3: Conectar el Dominio (Public Hostnames)
-
-Ahora le diremos a Cloudflare qué tráfico enviar a tu servidor.
-
-1.  En la pestaña **Public Hostnames**, haz clic en **Add a public hostname**.
-2.  Configura los datos así:
-
-    *   **Subdomain:** `apienviocomprobante`
-    *   **Domain:** `sistemasvargas.com`
-    *   **Path:** (Déjalo vacío)
-    *   **Service:**
-        *   **Type:** `HTTP`
-        *   **URL:** `localhost:80`
-
-    *> **NOTA IMPORTANTE:** Apuntamos al puerto **80** (localhost:80) para que el tráfico pase primero por el Nginx de aaPanel. Así, tus configuraciones de aaPanel (como el Proxy Reverso hacia el puerto 3000 que ya hiciste) seguirán funcionando correctamente.*
-
-3.  Haz clic en **Save hostname**.
-
----
-
-## ✅ ¡Listo!
-
-Ya no necesitas abrir puertos en tu router ni pelear con tu proveedor de internet.
-
-### Prueba tu web:
-Entra desde tu celular (con datos móviles, para estar fuera de tu red) a:
-`https://apienviocomprobante.sistemasvargas.com`
-
-Debería cargar perfectamente y con el candado de seguridad 🔒 proporcionado por Cloudflare.
-
----
-
-## 🛠️ Solución de Problemas
-
-### El comando de instalación da error
-Si usas CentOS (común en aaPanel) y el comando de Debian falla, intenta seleccionando **Red Hat** en la página de Cloudflare.
-
-### Error "Command not found"
-Asegúrate de copiar todo el comando completo.
-
-### Comandos útiles en aaPanel Terminal
-
-Ver si el túnel está corriendo:
 ```bash
-systemctl status cloudflared
+# Instalar Node.js 18 (o superior)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Instalar PM2 y pnpm
+sudo npm install -g pm2 pnpm
+pm2 install pm2-logrotate
 ```
 
-Reiniciar el túnel:
+### 2. Descargar el Proyecto
 ```bash
-systemctl restart cloudflared
+# Ir a la carpeta web
+cd /www/wwwroot/
+
+# Clonar el repositorio (si ya existe, borra la carpeta anterior)
+sudo rm -rf WHATSAPP25
+sudo git clone https://github.com/svargas201286/ApiEnvio-WhatsappWebJs.git WHATSAPP25
+
+# Asignar permisos correctos
+sudo chown -R www:www WHATSAPP25
+sudo chmod -R 755 WHATSAPP25
 ```
 
-Ver logs del túnel (para ver si hay errores de conexión):
+### 3. Instalar Dependencias
 ```bash
-journalctl -u cloudflared -f
+cd WHATSAPP25
+npm install --production
 ```
+
+---
+
+## ⚡ FASE 2: Configuración de DNS en Cloudflare (Estrategia Híbrida)
+
+Para evitar romper tus webs antiguas, configura esto en Cloudflare **ANTES** de conectar nada.
+
+1.  Entra a **Cloudflare > DNS > Records**.
+2.  Configura las nubes así (Crucial):
+
+| Tipo | Nombre | Contenido (IP Hosting Viejo) | Proxy Status | Acción |
+| :--- | :--- | :--- | :--- | :--- |
+| **A** | `sistemasvargas.com` | `65.181.111.156` | **☁️ GRIS (DNS Only)** | Deja pasar a hosting viejo |
+| **A** | `*` (Asterisco) | `65.181.111.156` | **☁️ GRIS (DNS Only)** | Salva todos los subdominios |
+| **CNAME** | `www` | `sistemasvargas.com` | **☁️ GRIS (DNS Only)** | - |
+| **CNAME** | `mail` | `sistemasvargas.com` | **☁️ GRIS (DNS Only)** | Salva correos |
+| **CNAME** | `apienviocomprobante` | `(ID-TUNEL).cfargotunnel.com` | **☁️ NARANJA (Proxied)** | **Único Túnel Activo** |
+
+---
+
+## � FASE 3: Instalación y Blindaje del Túnel
+
+En la terminal de tu servidor:
+
+### 1. Instalar Cloudflared
+```bash
+curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared.deb
+```
+
+### 2. Conectar el Túnel
+(Este comando te lo da Cloudflare Zero Trust al crear el túnel):
+```bash
+sudo cloudflared service install TU_TOKEN_LARGO_AQUI
+```
+
+### 3. 🛡️ FIX CRÍTICO: Protocolo HTTP2 (Estabilidad)
+Para evitar que tu proveedor de internet bloquee la conexión (Protocolo QUIC/UDP), forzamos HTTP2/TCP.
+
+1.  Edita el servicio:
+    ```bash
+    sudo nano /etc/systemd/system/cloudflared.service
+    ```
+2.  Busca la línea `ExecStart` y añade `--protocol http2` al final. Debe quedar así:
+    ```text
+    ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run --token ... --protocol http2
+    ```
+3.  Guarda (`Ctrl+O`, `Enter`, `Ctrl+X`) y reinicia:
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl restart cloudflared
+    ```
+4.  Verifica que esté **active (running)** y sin errores rojos:
+    ```bash
+    sudo systemctl status cloudflared
+    ```
+
+---
+
+## � FASE 4: Despliegue de la Aplicación (PM2)
+
+El túnel envía el tráfico a `localhost:3000`. Asegurémonos de que la app esté ahí.
+
+### 1. Iniciar la App
+```bash
+cd /www/wwwroot/WHATSAPP25
+
+# Iniciar proceso
+pm2 start main.js --name "whatsapp-api"
+
+# (Opcional) Si tienes ecosystem.config.js
+# pm2 start ecosystem.config.js
+
+# Guardar y configurar inicio al arranque
+pm2 save
+pm2 startup
+```
+
+### 2. Verificar funcionamiento local
+```bash
+curl -v http://localhost:3000
+```
+*Si recibes HTML, la app está viva.*
+
+---
+
+## � FASE 5: Solución de Problemas (Troubleshooting)
+
+### 1. Error 522 en Webs Antiguas (`dulcealba`, etc.)
+*   **Problema:** Cloudflare intenta proteger tu hosting viejo y este rechaza la conexión.
+*   **Solución:** Pon la nube en **GRIS** (DNS Only) para ese subdominio en Cloudflare DNS.
+
+### 2. Error 1033 o 502 en `apienviocomprobante`
+*   **Problema:** El túnel o la app están apagados.
+*   **Solución:**
+    *   Túnel: `sudo systemctl restart cloudflared`
+    *   App: `pm2 restart whatsapp-api`
+
+### 3. La conexión del Túnel es inestable (Logs con errores)
+*   **Problema:** Bloqueo de UDP/QUIC por el ISP.
+*   **Solución:** Aplica el fix de HTTP2 (Fase 3, Paso 3).
+
+### 4. En mi PC no carga, pero en celular sí
+*   **Problema:** Caché DNS sucio en Windows.
+*   **Solución:** Abre CMD en tu PC y ejecuta `ipconfig /flushdns`.
+
+---
+**¡Felicidades! Tienes un sistema profesional, seguro (HTTPS) y resiliente.**

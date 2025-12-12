@@ -1190,9 +1190,13 @@
         }
 
         // Cargar QR
-        async function loadQR(numero) {
+        async function loadQR(numero, retry = 0) {
             const qrContainer = document.getElementById('qrContainer');
-            qrContainer.innerHTML = '<div style="padding: 20px; color: #6c757d;"><i>⏳</i> Generando código QR...</div>';
+            
+            // Solo mostrar mensaje inicial en el primer intento
+            if (retry === 0) {
+                qrContainer.innerHTML = '<div style="padding: 20px; color: #6c757d;"><i>⏳</i> Iniciando WhatsApp... <br><small>Por favor espera, generando QR...</small></div>';
+            }
             
             try {
                 const response = await fetch(`/api/qr?numero=${numero}`, {
@@ -1203,16 +1207,30 @@
                 
                 if (response.ok) {
                     const data = await response.json();
+                    
                     if (data.qr) {
-                        qrContainer.innerHTML = `<img src="${data.qr}" style="max-width: 300px; height: auto; border: 1px solid #ddd; border-radius: 8px;" alt="QR Code">`;
-                        
-                        // Iniciar polling para verificar si se conectó
+                        // QR recibido con éxito
+                        qrContainer.innerHTML = `<img src="${data.qr}" style="max-width: 300px; height: auto; border: 1px solid #ddd; border-radius: 8px;" alt="QR Code"><div style="margin-top:10px; color:#666">Escanea con tu WhatsApp</div>`;
                         startQRPolling(numero);
+                    } else if (data.ready) {
+                        // Ya estaba conectado
+                        qrContainer.innerHTML = '<div style="padding: 20px; color: #28a745;"><i>✅</i> ¡Dispositivo ya conectado!</div>';
+                        setTimeout(() => {
+                            closeQRModal();
+                            refreshDevices();
+                        }, 2000);
                     } else {
-                        qrContainer.innerHTML = '<div style="padding: 20px; color: #dc3545;"><i>❌</i> No se pudo generar el QR. Intenta de nuevo.</div>';
+                        // Aún no hay QR (está cargando), reintentar
+                        if (retry < 20) { // Reintentar hasta 20 veces (aprox 1 minuto)
+                            const statusText = data.state === 'INIT' ? 'Iniciando...' : (data.state || 'Cargando...');
+                            qrContainer.innerHTML = `<div style="padding: 20px; color: #6c757d;"><i>⏳</i> ${statusText}<br><small>Intento ${retry + 1}...</small></div>`;
+                            setTimeout(() => loadQR(numero, retry + 1), 3000);
+                        } else {
+                            qrContainer.innerHTML = '<div style="padding: 20px; color: #dc3545;"><i>❌</i> Tardó demasiado. Cierra y vuelve a intentar.</div>';
+                        }
                     }
                 } else {
-                    qrContainer.innerHTML = '<div style="padding: 20px; color: #dc3545;"><i>❌</i> Error al obtener el QR.</div>';
+                    qrContainer.innerHTML = '<div style="padding: 20px; color: #dc3545;"><i>❌</i> Error al obtener respuesta del servidor.</div>';
                 }
             } catch (error) {
                 console.error('Error al cargar QR:', error);
