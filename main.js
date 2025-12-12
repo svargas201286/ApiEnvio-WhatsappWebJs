@@ -203,10 +203,11 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(3000, '0.0.0.0', () => {
-  console.log('API escuchando en puerto 3000');
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`API escuchando en puerto ${PORT}`);
   console.log('Sistema iniciado correctamente');
-  console.log('Accesible desde la red en: http://TU_IP_ESTATICA:3000');
+  console.log(`Accesible desde la red en: http://TU_IP_ESTATICA:${PORT}`);
   console.log('WebSocket disponible para actualizaciones en tiempo real');
 
   // Inicializar WhatsApp después de que el servidor esté listo
