@@ -353,11 +353,60 @@ Para instrucciones detalladas de instalación en un servidor con aaPanel, consul
 
 ---
 
-## 📖 Documentación Completa de la API
+## 📖 Documentación Completa
 
-Para ver todos los endpoints disponibles con ejemplos detallados, consulta:
+Esta API cuenta con documentación completa y organizada para diferentes necesidades:
+
+### � Para Desarrolladores que Integran Sistemas Externos
+
+Si necesitas integrar esta API con tu sistema de facturación, CRM, ERP u otra aplicación:
+
+📖 **[GUIA-INTEGRACION-SISTEMAS-EXTERNOS.md](./GUIA-INTEGRACION-SISTEMAS-EXTERNOS.md)**
+
+**Incluye:**
+- ✅ Proceso completo de conexión paso a paso
+- ✅ Ejemplos de código en PHP, Python, JavaScript, C# y cURL
+- ✅ Especificaciones de formatos y parámetros
+- ✅ Solución de problemas comunes
+- ✅ Mejores prácticas de seguridad
+
+### 📗 Referencia Técnica de la API
+
+Para ver todos los endpoints disponibles con ejemplos detallados:
 
 📖 **[DOCUMENTACION-API.md](./DOCUMENTACION-API.md)**
+
+**Incluye:**
+- ✅ Todos los endpoints con ejemplos
+- ✅ Parámetros y respuestas detalladas
+- ✅ Códigos de error y su significado
+- ✅ Autenticación y tokens
+- ✅ WebSocket y actualizaciones en tiempo real
+
+### 🔧 Documentación Técnica y Mantenimiento
+
+Para administradores del sistema y troubleshooting:
+
+📖 **[DOCUMENTACION-TECNICA.md](./DOCUMENTACION-TECNICA.md)**
+
+**Incluye:**
+- ✅ Arquitectura del sistema
+- ✅ Conexiones persistentes de WhatsApp
+- ✅ Procedimientos de mantenimiento
+- ✅ Solución de problemas comunes
+- ✅ Monitoreo y logs
+- ✅ Configuración de producción
+
+### 🚀 Guías de Instalación y Despliegue
+
+**Instalación en Servidor:**
+📖 **[GUIA-INSTALACION-SERVIDOR.md](./GUIA-INSTALACION-SERVIDOR.md)**
+
+**Configuración de Cloudflare Tunnel:**
+📖 **[GUIA-CLOUDFLARE-TUNNEL.md](./GUIA-CLOUDFLARE-TUNNEL.md)**
+
+**Auto-inicio en Ubuntu:**
+📖 **[GUIA-AUTOINICIO-UBUNTU.md](./GUIA-AUTOINICIO-UBUNTU.md)**
 
 ---
 
