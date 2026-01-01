@@ -55,7 +55,8 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 // Crear tabla de usuarios si no existe
 db.query(`CREATE TABLE IF NOT EXISTS usuarios (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  numero VARCHAR(20) UNIQUE NOT NULL,
+  numero VARCHAR(20) UNIQUE,
+  email VARCHAR(255) UNIQUE,
   password VARCHAR(255) NOT NULL,
   token VARCHAR(64) NOT NULL
 )`, (err) => {
@@ -65,13 +66,13 @@ db.query(`CREATE TABLE IF NOT EXISTS usuarios (
 // Crear tabla de dispositivos WhatsApp
 db.query(`CREATE TABLE IF NOT EXISTS dispositivos_whatsapp (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  numero VARCHAR(20) UNIQUE NOT NULL,
+  numero VARCHAR(20) NOT NULL,
   nombre VARCHAR(100) DEFAULT 'Dispositivo',
   estado ENUM('conectado', 'desconectado', 'conectando') DEFAULT 'desconectado',
   fecha_conexion TIMESTAMP NULL,
   fecha_desconexion TIMESTAMP NULL,
   ultima_actividad TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  instancia_id VARCHAR(255),
+  instancia_id VARCHAR(255) UNIQUE,
   qr_code TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -83,7 +84,7 @@ db.query(`CREATE TABLE IF NOT EXISTS dispositivos_whatsapp (
 async function initializeWhatsApp() {
   try {
     // Buscar dispositivos existentes en la base de datos
-    db.query('SELECT numero FROM dispositivos_whatsapp', async (err, results) => {
+    db.query('SELECT numero, instancia_id FROM dispositivos_whatsapp', async (err, results) => {
       if (err) {
         console.error('Error al obtener dispositivos:', err);
         return;
@@ -93,11 +94,11 @@ async function initializeWhatsApp() {
         console.log(`📱 Inicializando WhatsApp para ${results.length} dispositivo(s)...`);
 
         for (const device of results) {
-          const numero = device.numero;
-          console.log(`🔗 Conectando WhatsApp para: ${numero}`);
+          const { numero, instancia_id } = device;
+          console.log(`🔗 Conectando WhatsApp para: ${numero} (${instancia_id})`);
 
           try {
-            await whatsappController.ensureClient(numero);
+            await whatsappController.ensureClient(numero, instancia_id);
             console.log(`✅ WhatsApp inicializado para: ${numero}`);
           } catch (error) {
             console.error(`❌ Error al inicializar WhatsApp para ${numero}:`, error.message);

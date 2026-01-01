@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WhatsApp API Dashboard</title>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -157,6 +159,34 @@
         .btn:hover {
             background: #5a6fd8;
         }
+
+        .btn-action {
+            width: 35px;
+            height: 35px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 0 5px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .btn-action:hover {
+            transform: scale(1.1);
+        }
+
+        .btn-logout { background-color: #fd7e14; } /* Naranja */
+        .btn-logout:hover { background-color: #e36a00; }
+
+        .btn-edit { background-color: #0d6efd; } /* Azul */
+        .btn-edit:hover { background-color: #0b5ed7; }
+
+        .btn-delete { background-color: #dc3545; } /* Rojo */
+        .btn-delete:hover { background-color: #bb2d3b; }
         
         .form-group {
             margin-bottom: 15px;
@@ -461,7 +491,7 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="logo">
-                <h1>📱 WhatsApp API</h1>
+                <h1>📱 WhatAPI</h1>
             </div>
             <div class="nav-item active" onclick="showSection('dashboard')">
                 <i>🏠</i> Dashboard
@@ -482,10 +512,10 @@
             <div class="header">
                 <h2>Dashboard</h2>
                 <div class="user-profile">
-                    <div class="user-avatar">SV</div>
+                    <div class="user-avatar" id="userAvatar">U</div>
                     <div>
-                        <div>samuelvargas201286</div>
-                        <div style="font-size: 12px; color: #666;">samuelvargas201286@gmail.com</div>
+                        <div id="userName">Cargando...</div>
+                        <div style="font-size: 12px; color: #666;" id="userEmail">...</div>
                     </div>
                     <button class="btn" onclick="logout()">Cerrar Sesión</button>
                 </div>
@@ -727,6 +757,70 @@
         </div>
     </div>
 
+    <!-- Modal para editar dispositivo -->
+    <div id="editDeviceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Dispositivo</h3>
+                <button class="close-btn" onclick="closeEditDeviceModal()">&times;</button>
+            </div>
+            <form id="editDeviceForm">
+                <div class="form-group">
+                    <label>Número de teléfono:</label>
+                    <input type="text" id="editDeviceNumber" readonly style="background: #f5f5f5;">
+                </div>
+                <div class="form-group">
+                    <label>Nombre del dispositivo:</label>
+                    <input type="text" id="editDeviceName" placeholder="Ej: Dispositivo Principal" required>
+                </div>
+                <div class="form-group">
+                    <label>Instancia ID:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="editDeviceInstance" placeholder="ID de instancia" style="flex: 1;">
+                        <button type="button" class="btn" onclick="generateInstance('edit')" style="background: #17a2b8; white-space: nowrap;">
+                            🎲 Generar
+                        </button>
+                    </div>
+                    <small style="color: #6c757d; font-size: 12px;">Identificador único de la instancia (no se repetirá en otros dispositivos)</small>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeEditDeviceModal()" style="background: #6c757d;">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveDeviceChanges()" style="background: #007bff;">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para modificar instancia -->
+    <div id="modifyInstanceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Modificar Instancia</h3>
+                <button class="close-btn" onclick="closeModifyInstanceModal()">&times;</button>
+            </div>
+            <form id="modifyInstanceForm">
+                <div class="form-group">
+                    <label>Número de teléfono:</label>
+                    <input type="text" id="modifyInstanceNumber" readonly style="background: #f5f5f5;">
+                </div>
+                <div class="form-group">
+                    <label>Nueva Instancia ID:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="modifyInstanceId" placeholder="Nuevo ID de instancia" required style="flex: 1;">
+                        <button type="button" class="btn" onclick="generateInstance('modify')" style="background: #17a2b8; white-space: nowrap;">
+                            🎲 Generar
+                        </button>
+                    </div>
+                    <small style="color: #6c757d; font-size: 12px;">Ingrese el nuevo identificador de instancia (no se repetirá en otros dispositivos)</small>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModifyInstanceModal()" style="background: #6c757d;">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveInstanceChanges()" style="background: #007bff;">Actualizar Instancia</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Socket.IO Client -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -734,20 +828,47 @@
         let uptimeInterval = null;
         let socket = null;
 
+        async function loadUserProfile() {
+            try {
+                const res = await fetch('/api/me', {
+                    headers: { 'Authorization': 'Bearer ' + sessionData.token }
+                });
+                if (res.ok) {
+                    const user = await res.json();
+                    document.getElementById('userName').textContent = user.nombre || user.numero || 'Usuario';
+                    document.getElementById('userEmail').textContent = user.email || user.numero || '';
+                    
+                    const name = user.nombre || user.email || 'U';
+                    document.getElementById('userAvatar').textContent = name.substring(0, 2).toUpperCase();
+                } else {
+                     // Fallback if /api/me fails?
+                     if (sessionData && sessionData.identifier) {
+                        document.getElementById('userEmail').textContent = sessionData.identifier;
+                     }
+                }
+            } catch (e) {
+                console.error('Error cargando perfil', e);
+            }
+        }
+
         // Verificar sesión existente
-        function checkExistingSession() {
-            const saved = localStorage.getItem('wa_session');
-            if (saved) {
-                sessionData = JSON.parse(saved);
-                document.getElementById('tokenDisplay').textContent = sessionData.token;
-                startUptimeCounter();
-                // Cargar dispositivos al inicializar
-                refreshDevices();
+        async function checkSession() {
+            try {
+                const session = localStorage.getItem('wa_session');
+                if (!session) throw new Error('No hay sesión');
                 
-                // Inicializar WebSocket
-                initializeWebSocket();
-            } else {
-                // Redirigir al login si no hay sesión
+                sessionData = JSON.parse(session);
+                if (!sessionData.token) throw new Error('Token inválido');
+
+                // Load User Profile
+                await loadUserProfile(); // Await this to ensure user data is loaded before UI updates
+
+                document.getElementById('tokenDisplay').textContent = sessionData.token;
+                refreshDevices();
+                startUptimeCounter();
+                initializeWebSocket(); // Initialize WebSocket after successful session check
+            } catch (error) {
+                console.error('Error de sesión:', error);
                 window.location.href = '/login.html';
             }
         }
@@ -934,13 +1055,13 @@
         }
 
         // Desconectar dispositivo
-        async function disconnectDevice(number) {
-            if (!confirm(`¿Estás seguro de que quieres desconectar el dispositivo ${number}?`)) {
+        async function disconnectDevice(id) {
+            if (!confirm(`¿Estás seguro de que quieres cerrar esta sesión?`)) {
                 return;
             }
             
             try {
-                const response = await fetch(`/api/disconnect?numero=${number}`, {
+                const response = await fetch(`/api/disconnect?instancia_id=${id}`, {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Bearer ' + sessionData.token
@@ -1006,24 +1127,24 @@
                         <td>${device.name || 'Dispositivo'}</td>
                         <td>${device.number || 'N/A'}</td>
                         <td>${createdDate}</td>
-                        <td>${instanceId}</td>
+                        <td title="${instanceId}">${instanceId.substring(0, 10)}...</td>
                         <td>
                             <span class="status-badge ${device.ready ? 'status-active' : 'status-inactive'}">
                                 ${device.ready ? 'Sesión abierta' : 'Sesión cerrada'}
                             </span>
-                            ${!device.ready ? '<br><button class="btn btn-sm" onclick="showQR(\'' + device.number + '\')" style="background: #28a745; font-size: 10px; padding: 4px 8px; margin-top: 5px;">📱 Mostrar QR</button>' : ''}
+                            ${!device.ready ? '<br><button class="btn btn-sm" onclick="showQR(\'' + instanceId + '\')" style="background: #28a745; font-size: 10px; padding: 4px 8px; margin-top: 5px;">📱 Mostrar QR</button>' : ''}
                         </td>
                         <td>
-                            <div class="actions-dropdown">
-                                <button class="dropdown-btn" onclick="toggleDropdown(this)">⋮</button>
-                                <div class="dropdown-menu">
-                                    <div class="dropdown-item" onclick="disconnectDevice('${device.number}')">
-                                        <i>🚪</i> Cerrar sesión
-                                    </div>
-                                    <div class="dropdown-item" onclick="editDevice('${device.number}')">
-                                        <i>✏️</i> Ver/Editar
-                                    </div>
-                                </div>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="btn-action btn-logout" onclick="disconnectDevice('${instanceId}')" title="Cerrar sesión">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                </button>
+                                <button class="btn-action btn-edit" onclick="editDevice('${instanceId}')" title="Ver/Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-action btn-delete" onclick="deleteDevice('${instanceId}')" title="Eliminar dispositivo">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </td>
                     `;
@@ -1057,7 +1178,7 @@
                     // Agregar solo dispositivos conectados
                     devices.filter(device => device.ready).forEach(device => {
                         const option = document.createElement('option');
-                        option.value = device.number;
+                        option.value = device.instancia_id;
                         option.textContent = `${device.name || 'Dispositivo'} (${device.number})`;
                         selector.appendChild(option);
                     });
@@ -1148,9 +1269,230 @@
             }
         }
 
+        // Variables para modales
+        let currentEditDevice = null;
+        let currentModifyInstanceDevice = null;
+
         // Editar dispositivo
-        function editDevice(number) {
-            alert(`Función de edición para el dispositivo ${number} - Próximamente disponible`);
+        async function editDevice(id) {
+            try {
+                // Obtener información del dispositivo
+                const response = await fetch('/api/connections', {
+                    headers: {
+                        'Authorization': 'Bearer ' + sessionData.token
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const device = data.connections[id];
+                    
+                    if (device) {
+                        currentEditDevice = id;
+                        document.getElementById('editDeviceNumber').value = device.number || '';
+                        document.getElementById('editDeviceName').value = device.name || 'Dispositivo';
+                        document.getElementById('editDeviceInstance').value = device.instancia_id || id;
+                        document.getElementById('editDeviceModal').classList.add('show');
+                    } else {
+                        alert('Dispositivo no encontrado');
+                    }
+                } else {
+                    alert('Error al cargar información del dispositivo');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Cerrar modal de editar dispositivo
+        function closeEditDeviceModal() {
+            document.getElementById('editDeviceModal').classList.remove('show');
+            document.getElementById('editDeviceForm').reset();
+            currentEditDevice = null;
+        }
+
+        // Guardar cambios del dispositivo
+        async function saveDeviceChanges() {
+            if (!currentEditDevice) return;
+            
+            const nombre = document.getElementById('editDeviceName').value;
+            const instancia_id = document.getElementById('editDeviceInstance').value;
+            
+            if (!nombre) {
+                alert('El nombre del dispositivo es requerido');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/update-device', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + sessionData.token
+                    },
+                    body: JSON.stringify({
+                        instancia_id: currentEditDevice,
+                        nombre: nombre
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Dispositivo actualizado correctamente');
+                    closeEditDeviceModal();
+                    refreshDevices();
+                } else {
+                    const error = await response.json();
+                    alert('Error al actualizar dispositivo: ' + (error.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Modificar instancia
+        async function modifyInstance(number) {
+            try {
+                // Obtener información del dispositivo
+                const response = await fetch('/api/connections', {
+                    headers: {
+                        'Authorization': 'Bearer ' + sessionData.token
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const device = data.connections[number];
+                    
+                    if (device) {
+                        currentModifyInstanceDevice = number;
+                        document.getElementById('modifyInstanceNumber').value = device.number || number;
+                        document.getElementById('modifyInstanceId').value = device.instancia_id || '';
+                        document.getElementById('modifyInstanceModal').classList.add('show');
+                    } else {
+                        alert('Dispositivo no encontrado');
+                    }
+                } else {
+                    alert('Error al cargar información del dispositivo');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Cerrar modal de modificar instancia
+        function closeModifyInstanceModal() {
+            document.getElementById('modifyInstanceModal').classList.remove('show');
+            document.getElementById('modifyInstanceForm').reset();
+            currentModifyInstanceDevice = null;
+        }
+
+        // Guardar cambios de instancia
+        async function saveInstanceChanges() {
+            if (!currentModifyInstanceDevice) return;
+            
+            const instancia_id = document.getElementById('modifyInstanceId').value;
+            
+            if (!instancia_id) {
+                alert('El ID de instancia es requerido');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/update-instance', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + sessionData.token
+                    },
+                    body: JSON.stringify({
+                        numero: currentModifyInstanceDevice,
+                        instancia_id: instancia_id
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Instancia actualizada correctamente');
+                    closeModifyInstanceModal();
+                    refreshDevices();
+                } else {
+                    const error = await response.json();
+                    alert('Error al actualizar instancia: ' + (error.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Generar instancia única
+        async function generateInstance(modalType) {
+            try {
+                let numero = null;
+                
+                // Obtener el número del dispositivo según el modal
+                if (modalType === 'edit' && currentEditDevice) {
+                    numero = currentEditDevice;
+                } else if (modalType === 'modify' && currentModifyInstanceDevice) {
+                    numero = currentModifyInstanceDevice;
+                }
+                
+                // Llamar al endpoint para generar instancia única
+                const url = numero 
+                    ? `/api/generate-instance?numero=${numero}`
+                    : '/api/generate-instance';
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer ' + sessionData.token
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Actualizar el campo correspondiente
+                    if (modalType === 'edit') {
+                        document.getElementById('editDeviceInstance').value = data.instancia_id;
+                    } else if (modalType === 'modify') {
+                        document.getElementById('modifyInstanceId').value = data.instancia_id;
+                    }
+                } else {
+                    const error = await response.json();
+                    alert('Error al generar instancia: ' + (error.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Eliminar dispositivo
+        async function deleteDevice(id) {
+            if (!confirm(`¿Estás seguro de que quieres eliminar este dispositivo?\n\nEsta acción no se puede deshacer y desconectará la sesión si está activa.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/delete-device', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + sessionData.token
+                    },
+                    body: JSON.stringify({
+                        instancia_id: id
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Dispositivo eliminado correctamente');
+                    refreshDevices();
+                } else {
+                    const error = await response.json();
+                    alert('Error al eliminar dispositivo: ' + (error.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
         }
 
         // Ordenar tabla
@@ -1169,14 +1511,14 @@
         });
 
         // Variables para el QR
-        let currentQRNumber = null;
+        let currentQRId = null;
         let qrInterval = null;
 
         // Mostrar modal de QR
-        function showQR(numero) {
-            currentQRNumber = numero;
+        function showQR(id) {
+            currentQRId = id;
             document.getElementById('qrModal').classList.add('show');
-            loadQR(numero);
+            loadQR(id);
         }
 
         // Cerrar modal de QR
@@ -1186,11 +1528,11 @@
                 clearInterval(qrInterval);
                 qrInterval = null;
             }
-            currentQRNumber = null;
+            currentQRId = null;
         }
 
         // Cargar QR
-        async function loadQR(numero, retry = 0) {
+        async function loadQR(id, retry = 0) {
             const qrContainer = document.getElementById('qrContainer');
             
             // Solo mostrar mensaje inicial en el primer intento
@@ -1199,7 +1541,7 @@
             }
             
             try {
-                const response = await fetch(`/api/qr?numero=${numero}`, {
+                const response = await fetch(`/api/qr?instancia_id=${id}`, {
                     headers: {
                         'Authorization': 'Bearer ' + sessionData.token
                     }
@@ -1211,7 +1553,7 @@
                     if (data.qr) {
                         // QR recibido con éxito
                         qrContainer.innerHTML = `<img src="${data.qr}" style="max-width: 300px; height: auto; border: 1px solid #ddd; border-radius: 8px;" alt="QR Code"><div style="margin-top:10px; color:#666">Escanea con tu WhatsApp</div>`;
-                        startQRPolling(numero);
+                        startQRPolling(id);
                     } else if (data.ready) {
                         // Ya estaba conectado
                         qrContainer.innerHTML = '<div style="padding: 20px; color: #28a745;"><i>✅</i> ¡Dispositivo ya conectado!</div>';
@@ -1224,7 +1566,7 @@
                         if (retry < 20) { // Reintentar hasta 20 veces (aprox 1 minuto)
                             const statusText = data.state === 'INIT' ? 'Iniciando...' : (data.state || 'Cargando...');
                             qrContainer.innerHTML = `<div style="padding: 20px; color: #6c757d;"><i>⏳</i> ${statusText}<br><small>Intento ${retry + 1}...</small></div>`;
-                            setTimeout(() => loadQR(numero, retry + 1), 3000);
+                            setTimeout(() => loadQR(id, retry + 1), 3000);
                         } else {
                             qrContainer.innerHTML = '<div style="padding: 20px; color: #dc3545;"><i>❌</i> Tardó demasiado. Cierra y vuelve a intentar.</div>';
                         }
@@ -1240,20 +1582,20 @@
 
         // Actualizar QR
         function refreshQR() {
-            if (currentQRNumber) {
-                loadQR(currentQRNumber);
+            if (currentQRId) {
+                loadQR(currentQRId);
             }
         }
 
         // Polling para verificar conexión
-        function startQRPolling(numero) {
+        function startQRPolling(id) {
             if (qrInterval) {
                 clearInterval(qrInterval);
             }
             
             qrInterval = setInterval(async () => {
                 try {
-                    const response = await fetch(`/api/status?numero=${numero}`, {
+                    const response = await fetch(`/api/status?instancia_id=${id}`, {
                         headers: {
                             'Authorization': 'Bearer ' + sessionData.token
                         }
@@ -1292,7 +1634,7 @@
         }
 
         // Inicializar
-        checkExistingSession();
+        checkSession();
     </script>
 </body>
 </html>

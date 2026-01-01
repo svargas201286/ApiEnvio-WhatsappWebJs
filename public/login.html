@@ -1,238 +1,415 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Login WhatsApp API</title>
-  <link rel="icon" href="data:,">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | WhatsApp API</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #161623;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(#f00, #f0f);
+            clip-path: circle(30% at right 70%);
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(#2196f3, #e91e63);
+            clip-path: circle(20% at 10% 10%);
+        }
+
+        .container {
+            position: relative;
+            width: 350px;
+            min-height: 400px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 10;
+        }
+
+        .form {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            padding: 40px;
+        }
+
+        .form h2 {
+            position: relative;
+            color: #fff;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .form h2::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -10px;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background: #fff;
+            border-radius: 2px;
+        }
+
+        .inputBox {
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .inputBox input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            outline: none;
+            padding: 10px 20px;
+            border-radius: 35px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 16px;
+            letter-spacing: 1px;
+            color: #fff;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .inputBox input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .inputBox input[type="submit"] {
+            background: #fff;
+            color: #666;
+            max-width: 100px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            font-weight: 600;
+            transition: 0.3s;
+        }
+        
+        .btn-submit {
+            width: 100%;
+            background: linear-gradient(45deg, #ff357a, #fff172);
+            border: none;
+            outline: none;
+            padding: 10px 20px;
+            border-radius: 35px;
+            font-size: 16px;
+            letter-spacing: 1px;
+            color: #fff;
+            cursor: pointer;
+            margin-top: 20px;
+            font-weight: 600;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: 0.3s;
+        }
+
+        .btn-submit:hover {
+            transform: scale(1.05);
+        }
+
+        .forget {
+            margin-top: 10px;
+            color: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .forget label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .forget label input {
+            margin-right: 5px;
+        }
+
+        .forget a {
+            color: #fff;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .forget a:hover {
+            text-decoration: underline;
+        }
+        
+        .status-msg {
+            text-align: center;
+            margin-top: 15px;
+            color: #fff;
+            font-size: 14px;
+            min-height: 20px;
+        }
+        
+        .user-icon {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .user-icon i {
+            font-size: 80px;
+            color: rgba(255,255,255,0.5);
+        }
+    </style>
 </head>
 <body>
-  <h2>Acceso a WhatsApp API</h2>
-  <form id="loginForm">
-    <label>Número de celular:</label><br>
-    <input type="text" id="numero" required><br><br>
-    <label>Contraseña:</label><br>
-    <input type="password" id="password" required><br><br>
-    <button type="submit">Ingresar</button>
-  </form>
-  <div id="session" style="display:none;margin-bottom:10px">
-    <span id="sessionInfo" style="color:green"></span>
-    <button id="logoutBtn" style="margin-left:10px">Cerrar sesión</button>
-  </div>
-  <div id="token" style="color:green;display:none"></div>
-  <div id="qr" style="margin-top:30px;display:none"></div>
-  <div id="sendBox" style="display:none;margin-top:20px">
-    <h3>Enviar mensaje/PDF de prueba</h3>
-    <div>
-      <label>Número destino (EJ: 51988888888):</label><br>
-      <input type="text" id="toNumber" placeholder="51988888888">
+    <div class="container">
+        <div class="form">
+            <div class="user-icon">
+                <i class="fas fa-user-circle"></i>
+            </div>
+            <h2>Login</h2>
+            <form id="loginForm">
+                <div class="inputBox" id="nameBox" style="display:none;">
+                    <input type="text" id="name" placeholder="Tu Nombre">
+                </div>
+                <div class="inputBox">
+                    <input type="text" id="identifier" placeholder="Email o Teléfono" required>
+                </div>
+                <div class="inputBox">
+                    <input type="password" id="password" placeholder="Contraseña" required>
+                </div>
+                <div class="forget">
+                    <label>
+                        <input type="checkbox" id="rememberMe"> Recordarme
+                    </label>
+                    <a href="#" id="forgotBtn">¿Olvidaste tu contraseña?</a>
+                </div>
+                <button type="submit" class="btn-submit" id="submitBtn">INGRESAR</button>
+                
+                <div class="register-link">
+                    <p>¿No tienes una cuenta? <a href="#" id="toggleRegister">Regístrate</a></p>
+                </div>
+
+                <div class="status-msg" id="msg"></div>
+            </form>
+        </div>
     </div>
-    <div style="margin-top:10px">
-      <label>Mensaje (opcional si envías PDF):</label><br>
-      <input type="text" id="textMsg" placeholder="Hola desde API">
-    </div>
-    <div style="margin-top:10px">
-      <label>PDF (opcional):</label><br>
-      <input type="file" id="pdfFile" accept="application/pdf">
-    </div>
-    <div style="margin-top:10px">
-      <button id="sendBtn">Enviar</button>
-      <span id="sendInfo" style="margin-left:10px;color:#555;display:none"></span>
-    </div>
-  </div>
-  <div id="msg" style="color:red;display:none"></div>
 
-  <script>
-    const loginForm = document.getElementById('loginForm');
-    const qrDiv = document.getElementById('qr');
-    const tokenDiv = document.getElementById('token');
-    const msgDiv = document.getElementById('msg');
-    const sessionDiv = document.getElementById('session');
-    const sessionInfo = document.getElementById('sessionInfo');
-    const logoutBtn = document.getElementById('logoutBtn');
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const msgDiv = document.getElementById('msg');
+        const forgotBtn = document.getElementById('forgotBtn');
+        const toggleBtn = document.getElementById('toggleRegister');
+        const nameBox = document.getElementById('nameBox');
+        const title = document.querySelector('.form h2');
+        const submitBtn = document.getElementById('submitBtn');
+        const rememberDiv = document.querySelector('.forget label');
+        const forgotLink = document.getElementById('forgotBtn');
 
-    function showInfo(text) {
-      msgDiv.style.color = '#555';
-      msgDiv.textContent = String(text || '');
-      msgDiv.style.display = text ? 'block' : 'none';
-    }
-    function showError(text) {
-      msgDiv.style.color = 'red';
-      msgDiv.textContent = String(text || 'Error desconocido');
-      msgDiv.style.display = 'block';
-    }
+        let isRegisterMode = false;
 
-    async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const res = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(id);
-        return res;
-      } catch (e) {
-        clearTimeout(id);
-        throw e.name === 'AbortError' ? new Error('Tiempo de espera agotado') : e;
-      }
-    }
-
-    // Función removida - ya no se necesita
-    function showSession_OLD(numero, token) {
-      loginForm.style.display = 'none';
-      sessionInfo.textContent = `Sesión activa: ${numero}`;
-      sessionDiv.style.display = 'block';
-      tokenDiv.textContent = "Tu token: " + token;
-      tokenDiv.style.display = 'block';
-      document.getElementById('sendBox').style.display = 'block';
-    }
-
-    // Función removida - ya no se necesita
-    async function checkQr_OLD(numero) {
-      try {
-        showInfo('Consultando QR...');
-        const qrRes = await fetchWithTimeout(`/api/qr?numero=${numero}`);
-        if (!qrRes.ok) throw new Error(`QR status ${qrRes.status}`);
-        const qrData = await qrRes.json();
-        if (qrData.qr) {
-          showInfo('');
-          qrDiv.innerHTML = `<h3>Escanea el QR con tu WhatsApp</h3><img src="${qrData.qr}" /><div style="margin-top:8px;color:#555">Estado: ${qrData.state || 'UNKNOWN'}</div>`;
-          qrDiv.style.display = 'block';
-        } else if (qrData.ready) {
-          showInfo('');
-          qrDiv.innerHTML = `<span style="color:green">¡Sesión de WhatsApp ya vinculada!</span><div style="margin-top:8px;color:#555">Estado: ${qrData.state || 'CONNECTED'}</div>`;
-          qrDiv.style.display = 'block';
-        } else {
-          qrDiv.innerHTML = `<span>Preparando sesión... solicitando QR</span><div style="margin-top:8px;color:#555">Estado: ${qrData.state || 'INIT'}</div>`;
-          qrDiv.style.display = 'block';
-          setTimeout(() => checkQr(numero), 5000);
-        }
-      } catch (err) {
-        showError(err.message || err);
-      }
-    }
-
-    // Verificar sesión activa al cargar
-    (function checkSession() {
-      try {
-        const saved = localStorage.getItem('wa_session');
-        if (saved) {
-          const { numero, token } = JSON.parse(saved);
-          if (numero && token) {
-            console.log('Sesión encontrada, redirigiendo al dashboard...');
-            window.location.replace('/dashboard.html');
-          }
-        }
-      } catch (e) {
-        console.error('Error al leer sesión:', e);
-        localStorage.removeItem('wa_session'); // Limpiar si está corrupta
-      }
-    })();
-
-    logoutBtn.onclick = function() {
-      localStorage.removeItem('wa_session');
-      // Redirigir al login
-      window.location.href = '/login.html';
-    };
-
-    loginForm.onsubmit = async function(e) {
-      e.preventDefault();
-      qrDiv.style.display = 'none';
-      tokenDiv.style.display = 'none';
-      msgDiv.style.display = 'none';
-      const numero = document.getElementById('numero').value;
-      const password = document.getElementById('password').value;
-
-      try {
-        showInfo('Registrando/ingresando...');
-        // Registrar primero (si ya existe, ignorar) y luego login
-        try {
-          await fetchWithTimeout('/api/registro', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ numero, password })
-          });
-        } catch (_) {}
-
-        const res = await fetchWithTimeout('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ numero, password })
-        });
-        if (!res.ok) throw new Error(`Login status ${res.status}`);
-        const data = await res.json();
-        if (!data.token) throw new Error('Sin token en login');
-
-        localStorage.setItem('wa_session', JSON.stringify({ numero, token: data.token }));
-        // Redirigir al dashboard después del login exitoso
-        window.location.href = '/dashboard.html';
-      } catch (err) {
-        showError(err.message || err);
-      }
-
-      // Función removida - ya no se necesita
-      function startStatusPolling_OLD(numero) {
-        if (window._statusTimer) clearInterval(window._statusTimer);
-        window._statusTimer = setInterval(async () => {
-          try {
-            const res = await fetchWithTimeout(`/api/status?numero=${numero}`);
-            const st = await res.json();
-            if (st.ready) {
-              qrDiv.innerHTML = `<span style="color:green">¡Sesión de WhatsApp ya vinculada!</span>`;
-              qrDiv.style.display = 'block';
-            } else if (!st.ready && !st.hasQr) {
-              // Sesión desconectada: mostrar necesidad de nuevo QR
-              qrDiv.innerHTML = `<span>Sesión desconectada. Vuelve a iniciar para obtener nuevo QR.</span>`;
-              qrDiv.style.display = 'block';
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            isRegisterMode = !isRegisterMode;
+            
+            if (isRegisterMode) {
+                // Modo Registro
+                title.textContent = 'Registro';
+                nameBox.style.display = 'block';
+                document.getElementById('name').setAttribute('required', 'true');
+                submitBtn.textContent = 'REGISTRARSE';
+                toggleBtn.textContent = 'Ingresa aquí';
+                toggleBtn.parentElement.innerHTML = '¿Ya tienes una cuenta? <a href="#" id="toggleRegister">Ingresa aquí</a>';
+                // Re-bind event since we replaced innerHTML
+                document.getElementById('toggleRegister').addEventListener('click', toggleClickHandler);
+                
+                rememberDiv.style.visibility = 'hidden';
+                forgotLink.style.visibility = 'hidden';
+            } else {
+                // Modo Login
+                title.textContent = 'Login';
+                nameBox.style.display = 'none';
+                document.getElementById('name').removeAttribute('required');
+                submitBtn.textContent = 'INGRESAR';
+                toggleBtn.textContent = 'Regístrate';
+                toggleBtn.parentElement.innerHTML = '¿No tienes una cuenta? <a href="#" id="toggleRegister">Regístrate</a>';
+                // Re-bind event
+                document.getElementById('toggleRegister').addEventListener('click', toggleClickHandler);
+                
+                rememberDiv.style.visibility = 'visible';
+                forgotLink.style.visibility = 'visible';
             }
-          } catch (_) {}
-        }, 5000);
-      }
-    };
+            msgDiv.textContent = '';
+        });
 
-    // Envío de prueba
-    document.getElementById('sendBtn').onclick = async function() {
-      const saved = localStorage.getItem('wa_session');
-      if (!saved) return showError('No hay sesión');
-      const { token } = JSON.parse(saved);
-      const to = document.getElementById('toNumber').value.trim();
-      const text = document.getElementById('textMsg').value;
-      const fileInput = document.getElementById('pdfFile');
-      const sendInfo = document.getElementById('sendInfo');
-      if (!to) return showError('Ingresa número destino');
-      sendInfo.style.display = 'inline';
-      sendInfo.textContent = 'Enviando...';
-      try {
-        let body;
-        if (fileInput.files && fileInput.files[0]) {
-          const file = fileInput.files[0];
-          const arrayBuffer = await file.arrayBuffer();
-          const base64Data = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-          body = {
-            number: to,
-            mediatype: 'document',
-            media: base64Data,
-            filename: file.name || 'archivo.pdf',
-            caption: text || ''
-          };
-        } else {
-          // Enviar solo texto como caption con un archivo vacío no es válido. Por simplicidad, mandamos un PDF falso? No. Mejor mostrar mensaje.
-          // Aquí usamos un pequeño PDF vacío codificado si el usuario no adjunta.
-          const emptyPdf = 'JVBERi0xLjQKJcTl8uXrp/Og0MTGCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nL1BhZ2VzIDIgMCBSPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZS9QYWdlcy9LaWRzWzMgMCBSXT4+CmVuZG9iagozIDAgb2JqCjw8L1R5cGUvUGFnZS9NZWRpYUJveFswIDAgNjEyIDc5Ml0+PgplbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDkzIDAwMDAwIG4gCjAwMDAwMDAxNjIgMDAwMDAgbiAKMDAwMDAwMDI1MSAwMDAwMCBuIAp0cmFpbGVyCjw8L1Jvb3QgMSAwIFIvU2l6ZSA0Pj4KJSVFT0Y=';
-          body = { number: to, mediatype: 'document', media: emptyPdf, filename: 'mensaje.pdf', caption: text || '' };
+        function toggleClickHandler(e) {
+            e.preventDefault();
+            toggleBtn.click(); // Reuse existing logic by triggering click on the original (conceptually)
+            // Actually, better to just extract the logic or simpler: reload page? No.
+            // Let's just create a function for the toggle logic.
         }
 
-        const res = await fetch('/api/send-whatsap', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(body)
+        // To avoid complexity with re-binding, let's use a static listener on parent or cleaner separate function
+        // Re-writing toggle logic to be cleaner:
+        
+        const registerContainer = document.querySelector('.register-link p');
+        
+        function updateToggleLink() {
+            const text = isRegisterMode 
+                ? '¿Ya tienes una cuenta? <a href="#" id="toggleRegister">Ingresa aquí</a>'
+                : '¿No tienes una cuenta? <a href="#" id="toggleRegister">Regístrate</a>';
+            registerContainer.innerHTML = text;
+            document.getElementById('toggleRegister').addEventListener('click', (e) => {
+                e.preventDefault();
+                isRegisterMode = !isRegisterMode;
+                updateUI();
+            });
+        }
+
+        function updateUI() {
+            if (isRegisterMode) {
+                title.textContent = 'Registro';
+                nameBox.style.display = 'block';
+                document.getElementById('name').setAttribute('required', 'true');
+                submitBtn.textContent = 'REGISTRARSE';
+                rememberDiv.style.visibility = 'hidden';
+                forgotLink.style.visibility = 'hidden';
+            } else {
+                title.textContent = 'Login';
+                nameBox.style.display = 'none';
+                document.getElementById('name').removeAttribute('required');
+                submitBtn.textContent = 'INGRESAR';
+                rememberDiv.style.visibility = 'visible';
+                forgotLink.style.visibility = 'visible';
+            }
+            updateToggleLink();
+            msgDiv.textContent = '';
+        }
+
+        // Initial bind (overwrite the previous simple one)
+        updateToggleLink();
+
+
+        // ... (Keep existing Forgot Password and Window Load logic) ...
+        // Forgot Password
+        forgotBtn.addEventListener('click', async (e) => {
+             // ... existing code ...
+             e.preventDefault();
+            const email = document.getElementById('identifier').value;
+            if (!email || !email.includes('@')) {
+                showMessage('Por favor ingresa tu email para recuperar la contraseña', 'orange');
+                return;
+            }
+            showMessage('Enviando instrucciones...', 'white');
+            try {
+                const res = await fetch('/api/forgot-password', { 
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email })
+                });
+                showMessage('Si el correo es válido, recibirás instrucciones de recuperación.', 'lightgreen');
+            } catch (error) {
+                showMessage('Error al procesar solicitud', 'red');
+            }
         });
-        const data = await res.json();
-        if (!res.ok || !data.succes && !data.success) throw new Error(data.error || 'Error enviando');
-        sendInfo.textContent = 'Enviado correctamente';
-      } catch (e) {
-        sendInfo.textContent = 'Error: ' + (e.message || e);
-      }
-    };
-  </script>
+
+        window.addEventListener('load', () => {
+            const remembered = localStorage.getItem('wa_remembered_user');
+            if (remembered) {
+                document.getElementById('identifier').value = remembered;
+                document.getElementById('rememberMe').checked = true;
+            }
+        });
+
+        function showMessage(text, color) {
+            msgDiv.style.color = color;
+            msgDiv.textContent = text;
+        }
+
+        loginForm.onsubmit = async function(e) {
+            e.preventDefault();
+            const identifier = document.getElementById('identifier').value;
+            const password = document.getElementById('password').value;
+            const name = document.getElementById('name').value;
+            const rememberMe = document.getElementById('rememberMe').checked;
+
+            showMessage('Procesando...', 'white');
+
+            const isEmail = identifier.includes('@');
+            const payload = { password, name };
+            if (isEmail) payload.email = identifier;
+            else payload.numero = identifier;
+
+            const endpoint = isRegisterMode ? '/api/registro' : '/api/login';
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.token) {
+                    // Success
+                    localStorage.setItem('wa_session', JSON.stringify({ 
+                        token: data.token,
+                        identifier: identifier 
+                    }));
+                    
+                    if (rememberMe && !isRegisterMode) {
+                        localStorage.setItem('wa_remembered_user', identifier);
+                    } else if (!rememberMe) {
+                        localStorage.removeItem('wa_remembered_user');
+                    }
+
+                    showMessage(`¡${isRegisterMode ? 'Registro exitoso' : 'Bienvenido'}!`, 'lightgreen');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard.html';
+                    }, 1000);
+                } else {
+                    showMessage(data.error || 'Error en la operación', 'red');
+                }
+            } catch (err) {
+                console.error(err);
+                showMessage('Error de conexión con el servidor', 'red');
+            }
+        };
+    </script>
 </body>
 </html>
