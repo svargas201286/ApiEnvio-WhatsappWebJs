@@ -163,16 +163,27 @@ async function ensureClient(numero, instancia_id) {
         clients[instancia_id].ready = false;
         clients[instancia_id].state = 'AUTH_FAILURE';
         db.query('UPDATE dispositivos_whatsapp SET estado = "desconectado" WHERE instancia_id = ?', [instancia_id]);
+
+        // Emitir evento para quitar spinner de "Conectando"
+        try { require('../main').io.emit('deviceStatusChanged', { instancia_id, status: 'desconectado', ready: false }); } catch (e) { }
       }
     });
 
     // Inicializar cliente y agregar un retardo artificial para evitar sobrecarga secuencial
+    // Actualizar estado en BD a 'conectando' para feedback visual inmediato
+    db.query('UPDATE dispositivos_whatsapp SET estado = "conectando" WHERE instancia_id = ?', [instancia_id]);
+
+    // Emitir evento de 'conectando'
+    try { require('../main').io.emit('deviceStatusChanged', { instancia_id, status: 'conectando' }); } catch (e) { }
+
     try {
       await client.initialize();
-      // Esperar un poco para dar tiempo al navegador a arrancar antes de resolver (throttle)
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Retardo reducido a 1s para balancear carga y velocidad
+      await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (e) {
       console.error(`❌ Init Error (${instancia_id}):`, e.message);
+      // Emitir fallo de inicialización
+      try { require('../main').io.emit('deviceStatusChanged', { instancia_id, status: 'error' }); } catch (e) { }
     }
   }
 }
@@ -294,6 +305,8 @@ exports.disconnectDevice = async (req, res) => {
     if (state?.client) {
       await state.client.logout().catch(() => { });
       await state.client.destroy().catch(() => { });
+      // Esperar a que Chrome libere los archivos (evitar EBUSY)
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
 
     // Forzar eliminación de la carpeta de sesión para evitar estados corruptos
@@ -303,7 +316,7 @@ exports.disconnectDevice = async (req, res) => {
       try {
         fs.rmSync(sessionPath, { recursive: true, force: true });
       } catch (err) {
-        console.error('Error al eliminar carpeta de sesión:', err);
+        console.error('⚠️ Advertencia al eliminar carpeta (posible bloqueo):', err.message);
       }
     }
 
@@ -311,9 +324,21 @@ exports.disconnectDevice = async (req, res) => {
       delete clients[device.instancia_id];
     }
 
-    await deviceController.updateDeviceStatus(device.numero, 'desconectado');
+    // Actualizar BD
+    db.query('UPDATE dispositivos_whatsapp SET estado = "desconectado", qr_code = NULL, fecha_desconexion = NOW() WHERE instancia_id = ?', [device.instancia_id]);
+
+    // Emitir evento de desconexión a la UI
+    try {
+      require('../main').io.emit('deviceStatusChanged', {
+        instancia_id: device.instancia_id,
+        status: 'desconectado',
+        ready: false
+      });
+    } catch (e) { console.error('Error emitiendo socket en disconnect:', e); }
+
     res.json({ success: true });
   } catch (error) {
+    console.error('Error en disconnectDevice:', error);
     res.status(500).json({ error: 'Error interno' });
   }
 };

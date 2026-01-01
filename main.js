@@ -91,21 +91,36 @@ async function initializeWhatsApp() {
       }
 
       if (results.length > 0) {
-        console.log(`📱 Inicializando WhatsApp para ${results.length} dispositivo(s)...`);
+        console.log(`📱 [STARTUP] Inicializando WhatsApp para ${results.length} dispositivo(s)...`);
+
+        // Marcar TODOS como 'conectando' visualmente antes de iniciar el proceso pesado
+        // Esto da feedback inmediato al usuario de que el sistema "los vio" a todos
+        const ids = results.map(d => `'${d.instancia_id}'`).join(',');
+        if (ids) {
+          await new Promise(resolve => {
+            db.query(`UPDATE dispositivos_whatsapp SET estado = 'conectando' WHERE instancia_id IN (${ids})`, (err) => {
+              if (err) console.error('❌ Error actualizando estados iniciales:', err);
+              // Emitir evento masivo para actualizar UI instantáneamente
+              io.emit('deviceStatusChanged', { action: 'global_init', status: 'conectando' });
+              resolve();
+            });
+          });
+        }
 
         for (const device of results) {
           const { numero, instancia_id } = device;
-          console.log(`🔗 Conectando WhatsApp para: ${numero} (${instancia_id})`);
+          console.log(`🔗 [STARTUP] Intentando conectar: ${numero} (${instancia_id})`);
 
           try {
             await whatsappController.ensureClient(numero, instancia_id);
-            console.log(`✅ WhatsApp inicializado para: ${numero}`);
+            console.log(`✅ [STARTUP] Iniciado correctamente: ${numero}`);
           } catch (error) {
-            console.error(`❌ Error al inicializar WhatsApp para ${numero}:`, error.message);
+            console.error(`❌ [STARTUP] Error al iniciar ${numero}:`, error.message);
           }
         }
+        console.log('🏁 [STARTUP] Inicialización masiva completada.');
       } else {
-        console.log('📱 No hay dispositivos registrados para inicializar WhatsApp');
+        console.log('📱 [STARTUP] No hay dispositivos registrados en BD.');
       }
     });
   } catch (error) {

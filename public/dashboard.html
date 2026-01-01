@@ -1219,16 +1219,32 @@
                     const createdDate = device.createdAt ? new Date(device.createdAt).toLocaleString('es-ES') : 'N/A';
                     const instanceId = device.instancia_id || btoa(device.number || '');
                     
+
+                    let statusClass = 'status-inactive';
+                    let statusText = 'Sesión cerrada';
+                    
+                    if (device.ready) {
+                        statusClass = 'status-active';
+                        statusText = 'Sesión abierta';
+                    } else if (device.state === 'conectando' || device.state === 'INIT') {
+                        statusClass = 'status-pending'; // Necesitamos definir este estilo CSS si no existe, o usar uno similar
+                        statusText = '⏳ Conectando...';
+                    }
+
+                    // Definir estilo inline para pending si no existe en CSS
+                    const pendingStyle = (device.state === 'conectando' || device.state === 'INIT') ? 'background: #ffc107; color: #000;' : '';
+
                     row.innerHTML = `
                         <td>${device.name || 'Dispositivo'}</td>
                         <td>${device.number || 'N/A'}</td>
                         <td>${createdDate}</td>
                         <td title="${instanceId}">${instanceId.substring(0, 10)}...</td>
                         <td>
-                            <span class="status-badge ${device.ready ? 'status-active' : 'status-inactive'}">
-                                ${device.ready ? 'Sesión abierta' : 'Sesión cerrada'}
+                            <span class="status-badge ${statusClass}" style="${pendingStyle}">
+                                ${statusText}
                             </span>
-                            ${!device.ready ? '<br><button class="btn btn-sm" onclick="showQR(\'' + instanceId + '\')" style="background: #28a745; font-size: 10px; padding: 4px 8px; margin-top: 5px;">📱 Mostrar QR</button>' : ''}
+                            ${!device.ready && device.state !== 'conectando' && device.state !== 'INIT' ? '<br><button class="btn btn-sm" onclick="showQR(\'' + instanceId + '\')" style="background: #28a745; font-size: 10px; padding: 4px 8px; margin-top: 5px;">📱 Mostrar QR</button>' : ''}
+                            ${(device.state === 'conectando' || device.state === 'INIT') ? '<br><small style="color: #666; font-size: 10px;">Autoconectando...</small>' : ''}
                         </td>
                         <td>
                             <div style="display: flex; gap: 5px;">
