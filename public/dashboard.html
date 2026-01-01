@@ -821,6 +821,27 @@
         </div>
     </div>
 
+    <!-- Modal de confirmación de cierre de sesión (Elegante) -->
+    <div id="logoutConfirmModal" class="modal">
+        <div class="modal-content" style="max-width: 400px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+                <h3 class="modal-title" style="color: #333; font-size: 1.5em; text-align: center; width: 100%;">¿Cerrar Sesión?</h3>
+            </div>
+            <div style="text-align: center; padding: 20px; color: #666;">
+                <p>Estás a punto de desconectar este dispositivo.<br>Si el dispositivo no responde, tendrás que volver a escanear el código QR.</p>
+                <div style="font-size: 3em; margin: 15px 0;">🚪🚶</div>
+            </div>
+            <div class="modal-footer" style="border-top: none; justify-content: center; padding-top: 0; padding-bottom: 25px; gap: 15px;">
+                <button class="btn" onclick="closeDisconnectModal()" style="background: #e9ecef; color: #495057; border-radius: 20px; padding: 10px 20px; border: none; font-weight: 600;">
+                    Cancelar
+                </button>
+                <button class="btn btn-danger" onclick="confirmDisconnect()" style="background: #dc3545; color: white; border-radius: 20px; padding: 10px 20px; border: none; font-weight: 600; box-shadow: 0 4px 6px rgba(220, 53, 69, 0.3);">
+                    Sí, Desconectar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Socket.IO Client -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -934,6 +955,54 @@
             });
         }
 
+        // Función para mostrar notificaciones Toast personalizadas
+        function showToast(message, type = 'info') {
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
+                document.body.appendChild(toastContainer);
+            }
+            
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#17a2b8'};
+                color: white;
+                padding: 12px 24px;
+                border-radius: 4px;
+                margin-bottom: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                display: flex;
+                align-items: center;
+                min-width: 250px;
+                animation: slideIn 0.3s ease-out;
+                font-family: 'Segoe UI', sans-serif;
+            `;
+            
+            toast.innerHTML = `
+                <span style="margin-right: 10px; font-size: 1.2em;">${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span>
+                <span>${message}</span>
+            `;
+            
+            // Animación CSS (inyectar si no existe)
+            if (!document.getElementById('toast-styles')) {
+                const style = document.createElement('style');
+                style.id = 'toast-styles';
+                style.innerHTML = `
+                    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+                    @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.5s ease-in forwards';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+
         // Enviar mensaje
         async function sendMessage() {
             const number = document.getElementById('destNumber').value;
@@ -941,7 +1010,7 @@
             const fromNumber = document.getElementById('fromNumber').value;
             
             if (!number || !message || !fromNumber) {
-                alert('Por favor completa todos los campos y selecciona un dispositivo');
+                showToast('Por favor completa todos los campos y selecciona un dispositivo', 'error');
                 return;
             }
             
@@ -955,15 +1024,18 @@
                     body: JSON.stringify({ number, message, fromNumber })
                 });
                 
+                const responseData = await response.json();
+                
                 if (response.ok) {
-                    const data = await response.json();
-                    alert(`Mensaje enviado correctamente desde ${data.from}`);
+                    showToast(`Mensaje enviado correctamente desde ${responseData.from || 'tu dispositivo'}`, 'success');
+                    // Limpiar campos
+                    document.getElementById('destNumber').value = '';
+                    document.getElementById('messageText').value = '';
                 } else {
-                    const error = await response.json();
-                    alert('Error al enviar mensaje: ' + error.error);
+                    showToast('Error al enviar: ' + (responseData.error || 'Desconocido'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error de conexión: ' + error.message, 'error');
             }
         }
 
@@ -1054,12 +1126,31 @@
             }, 1000);
         }
 
-        // Desconectar dispositivo
-        async function disconnectDevice(id) {
-            if (!confirm(`¿Estás seguro de que quieres cerrar esta sesión?`)) {
-                return;
-            }
+        // Variables para el modal de confirmación
+        let deviceIdToDisconnect = null;
+
+        // Mostrar modal de confirmación de desconexión
+        function showDisconnectModal(id) {
+            deviceIdToDisconnect = id;
+            document.getElementById('logoutConfirmModal').classList.add('show');
+        }
+
+        // Cerrar modal de confirmación
+        function closeDisconnectModal() {
+            document.getElementById('logoutConfirmModal').classList.remove('show');
+            deviceIdToDisconnect = null;
+        }
+
+        // Ejecutar desconexión confirmada
+        async function confirmDisconnect() {
+            if (!deviceIdToDisconnect) return;
             
+            const id = deviceIdToDisconnect;
+            closeDisconnectModal();
+            
+            // Mostrar estado de carga (opcional, usando Toast que ya implementamos)
+            showToast('Desconectando dispositivo...', 'info');
+
             try {
                 const response = await fetch(`/api/disconnect?instancia_id=${id}`, {
                     method: 'POST',
@@ -1069,15 +1160,20 @@
                 });
                 
                 if (response.ok) {
-                    alert('Dispositivo desconectado correctamente');
+                    showToast('Dispositivo desconectado correctamente', 'success');
                     refreshDevices(); // Actualizar la lista
                 } else {
                     const error = await response.json();
-                    alert('Error al desconectar: ' + (error.message || 'Error desconocido'));
+                    showToast('Error al desconectar: ' + (error.message || 'Error desconocido'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error de conexión: ' + error.message, 'error');
             }
+        }
+        
+        // Redirigir la función antigua para usar el nuevo modal
+        function disconnectDevice(id) {
+            showDisconnectModal(id);
         }
 
         // Actualizar lista de dispositivos
@@ -1529,6 +1625,8 @@
                 qrInterval = null;
             }
             currentQRId = null;
+            // Limpiar contenedor para evitar "flash" de imágenes anteriores al reabrir
+            document.getElementById('qrContainer').innerHTML = '';
         }
 
         // Cargar QR
@@ -1541,7 +1639,8 @@
             }
             
             try {
-                const response = await fetch(`/api/qr?instancia_id=${id}`, {
+                // Agregar timestamp para evitar cache del navegador
+                const response = await fetch(`/api/qr?instancia_id=${id}&t=${Date.now()}`, {
                     headers: {
                         'Authorization': 'Bearer ' + sessionData.token
                     }

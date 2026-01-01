@@ -4,6 +4,8 @@ const whatsappController = require('../controllers/whatsappController');
 const legacyController = require('../controllers/legacyController');
 const auth = require('../middlewares/auth');
 
+const queueController = require('../controllers/queueController');
+
 const router = express.Router();
 
 router.post('/registro', userController.register);
@@ -20,8 +22,8 @@ router.post('/update-device', auth, whatsappController.updateDevice);
 router.post('/update-instance', auth, whatsappController.updateInstance);
 router.get('/generate-instance', auth, whatsappController.generateInstance);
 router.post('/generate-instance', auth, whatsappController.generateInstance);
-router.post('/send-message', auth, whatsappController.sendMessage);
-router.post('/send-whatsap', auth, whatsappController.sendDocument);
+router.post('/send-message', auth, queueController.addToQueue);
+router.post('/send-whatsap', auth, queueController.addToQueue);
 
 // Endpoint legacy para compatibilidad con sistema de facturación existente
 router.post('/send-whatsap-legacy', auth, legacyController.sendWhatsappLegacy);

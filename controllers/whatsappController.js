@@ -152,7 +152,13 @@ async function ensureClient(numero, instancia_id) {
       }
     });
 
+    client.on('authenticated', () => {
+      console.log(`🔑 Authenticated: ${instancia_id}`);
+      clients[instancia_id].state = 'AUTHENTICATED';
+    });
+
     client.on('auth_failure', async (msg) => {
+      console.error(`❌ Auth Failure: ${instancia_id}`, msg);
       if (clients[instancia_id]) {
         clients[instancia_id].ready = false;
         clients[instancia_id].state = 'AUTH_FAILURE';
@@ -160,7 +166,14 @@ async function ensureClient(numero, instancia_id) {
       }
     });
 
-    client.initialize().catch(e => console.error('Init Error:', e));
+    // Inicializar cliente y agregar un retardo artificial para evitar sobrecarga secuencial
+    try {
+      await client.initialize();
+      // Esperar un poco para dar tiempo al navegador a arrancar antes de resolver (throttle)
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    } catch (e) {
+      console.error(`❌ Init Error (${instancia_id}):`, e.message);
+    }
   }
 }
 
@@ -281,6 +294,20 @@ exports.disconnectDevice = async (req, res) => {
     if (state?.client) {
       await state.client.logout().catch(() => { });
       await state.client.destroy().catch(() => { });
+    }
+
+    // Forzar eliminación de la carpeta de sesión para evitar estados corruptos
+    const sessionPath = `./.wwebjs_auth/session-${device.instancia_id}`;
+    if (fs.existsSync(sessionPath)) {
+      console.log(`🧹 Eliminando datos de sesión residuales para: ${device.instancia_id}`);
+      try {
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+      } catch (err) {
+        console.error('Error al eliminar carpeta de sesión:', err);
+      }
+    }
+
+    if (clients[device.instancia_id]) {
       delete clients[device.instancia_id];
     }
 

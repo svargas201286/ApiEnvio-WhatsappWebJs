@@ -214,6 +214,9 @@ server.listen(PORT, '0.0.0.0', () => {
   // Inicializar WhatsApp después de que el servidor esté listo
   setTimeout(() => {
     initializeWhatsApp();
+    // Iniciar procesador de cola
+    const queueController = require('./controllers/queueController');
+    queueController.init();
   }, 2000); // Esperar 2 segundos para que todo esté listo
 });
 
