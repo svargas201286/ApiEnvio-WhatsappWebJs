@@ -33,11 +33,12 @@ exports.addToQueue = (req, res) => {
   let mediaUrl = null;
   let msgContent = message;
 
-  if (mediatype && media) {
-    tipo = mediatype === 'document' ? 'documento' : 'media'; // Simplificación
-    mediaUrl = media; // Guardamos base64 directamente (OJO: Puede ser pesado para TEXT, mejor sería guardar en archivo y ruta, pero por ahora base64 DB)
-    // Nota: Guardar base64 grande en TEXT puede truncarse si es muy grande. MEDIUMTEXT o LONGTEXT recomendado.
-    // Por compatibilidad rapida usaremos TEXT, pero advertimos si es muy grande.
+  if (req.file) {
+    tipo = req.file.mimetype.includes('pdf') ? 'documento' : 'media'; // Simplificación básica
+    mediaUrl = req.file.path; // Guardamos la ruta del archivo local
+  } else if (mediatype && media) {
+    tipo = mediatype === 'document' ? 'documento' : 'media';
+    mediaUrl = media; // Base64 fallback (para API remota si se usara)
   }
 
   // Buscamos la instancia_id asociada al sender (numero)
@@ -149,26 +150,27 @@ async function processInstanceQueue(instancia_id) {
           const clientData = clients[instancia_id];
 
           // Reconstruir media
-          // msg.media_url contiene el base64 data URI o raw base64. 
-          // MessageMedia espera (mimetype, base64 data, filename)
-          // Asumimos que viene data:iamge/png;base64,... o similar
-
           let mediaObj = null;
-          if (msg.media_url.startsWith('data:')) {
-            // Parse Data URI ?? 
-            // MessageMedia.fromFilePath ? No, fromUrl ? No.
-            // MessageMedia(mimetype, data, filename)
+
+          if (msg.media_url.startsWith('uploads') || msg.media_url.includes('/') || msg.media_url.includes('\\')) {
+            // Es un archivo local (ruta)
+            mediaObj = MessageMedia.fromFilePath(msg.media_url);
+          } else if (msg.media_url.startsWith('data:')) {
+            // Base64 Data URI
             const parts = msg.media_url.split(',');
             const mime = parts[0].match(/:(.*?);/)[1];
             const data = parts[1];
             mediaObj = new MessageMedia(mime, data, msg.caption || 'file');
           } else {
-            // Assume raw base64 and PDF default if doc
+            // Fallback
             const mime = msg.tipo === 'documento' ? 'application/pdf' : 'image/jpeg';
             mediaObj = new MessageMedia(mime, msg.media_url, msg.caption || 'file');
           }
 
           await clientData.client.sendMessage(`${msg.numero_destino}@c.us`, mediaObj, { caption: msg.caption });
+
+          // Opcional: Borrar archivo temporal después de envío exitoso?
+          // Por ahora lo dejamos para historial o debug audit
           success = true;
         }
 

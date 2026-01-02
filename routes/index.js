@@ -3,6 +3,27 @@ const userController = require('../controllers/userController');
 const whatsappController = require('../controllers/whatsappController');
 const legacyController = require('../controllers/legacyController');
 const auth = require('../middlewares/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configuración de Multer
+const uploadDir = 'uploads';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/')
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname))
+  }
+});
+
+const upload = multer({ storage: storage });
 
 const queueController = require('../controllers/queueController');
 
@@ -23,7 +44,10 @@ router.post('/update-instance', auth, whatsappController.updateInstance);
 router.get('/generate-instance', auth, whatsappController.generateInstance);
 router.post('/generate-instance', auth, whatsappController.generateInstance);
 router.post('/send-message', auth, queueController.addToQueue);
-router.post('/send-whatsap', auth, queueController.addToQueue);
+
+// Rutas para archivos
+router.post('/send-media', auth, upload.single('media'), queueController.addToQueue);
+router.post('/send-whatsap', auth, upload.single('pdf'), queueController.addToQueue);
 
 // Endpoint legacy para compatibilidad con sistema de facturación existente
 router.post('/send-whatsap-legacy', auth, legacyController.sendWhatsappLegacy);

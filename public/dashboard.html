@@ -1044,7 +1044,7 @@
             const fromNumber = document.getElementById('fromNumberMedia').value;
             
             if (!number || !file || !fromNumber) {
-                alert('Por favor completa todos los campos y selecciona un dispositivo');
+                showToast('Por favor completa todos los campos y selecciona un dispositivo', 'error');
                 return;
             }
             
@@ -1063,15 +1063,19 @@
                     body: formData
                 });
                 
+                const responseData = await response.json();
+
                 if (response.ok) {
-                    const data = await response.json();
-                    alert(`Media enviado correctamente desde ${data.from}`);
+                    showToast(`Media enviado correctamente desde ${responseData.from || 'tu dispositivo'}`, 'success');
+                    // Limpiar campos
+                    document.getElementById('destNumberMedia').value = '';
+                    document.getElementById('mediaFile').value = '';
+                    document.getElementById('mediaCaption').value = '';
                 } else {
-                    const error = await response.json();
-                    alert('Error al enviar media: ' + error.error);
+                    showToast('Error al enviar media: ' + (responseData.error || 'Desconocido'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error de conexión: ' + error.message, 'error');
             }
         }
 
@@ -1083,7 +1087,7 @@
             const fromNumber = document.getElementById('fromNumberDoc').value;
             
             if (!number || !file || !fromNumber) {
-                alert('Por favor completa todos los campos y selecciona un dispositivo');
+                showToast('Por favor completa todos los campos y selecciona un dispositivo', 'error');
                 return;
             }
             
@@ -1102,15 +1106,19 @@
                     body: formData
                 });
                 
+                const responseData = await response.json();
+
                 if (response.ok) {
-                    const data = await response.json();
-                    alert(`Documento enviado correctamente desde ${data.from}`);
+                    showToast(`Documento enviado correctamente desde ${responseData.from || 'tu dispositivo'}`, 'success');
+                    // Limpiar campos
+                    document.getElementById('destNumberDoc').value = '';
+                    document.getElementById('documentFile').value = '';
+                    document.getElementById('docCaption').value = '';
                 } else {
-                    const error = await response.json();
-                    alert('Error al enviar documento: ' + error.error);
+                    showToast('Error al enviar documento: ' + (responseData.error || 'Desconocido'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error de conexión: ' + error.message, 'error');
             }
         }
 
