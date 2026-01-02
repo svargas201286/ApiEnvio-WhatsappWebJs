@@ -658,10 +658,7 @@
                                     <th onclick="sortTable('phone')">
                                         TELÉFONO <span class="sort-icon">↕️</span>
                                     </th>
-                                    <th onclick="sortTable('created')">
-                                        FECHA CREACIÓN <span class="sort-icon">↕️</span>
-                                    </th>
-                                    <th onclick="sortTable('instance')">
+                                    <th onclick="sortTable('instance')" style="min-width: 150px;">
                                         INSTANCIA <span class="sort-icon">↕️</span>
                                     </th>
                                     <th onclick="sortTable('status')">
@@ -1216,7 +1213,7 @@
                 
                 deviceList.forEach(device => {
                     const row = document.createElement('tr');
-                    const createdDate = device.createdAt ? new Date(device.createdAt).toLocaleString('es-ES') : 'N/A';
+                    // const createdDate = device.createdAt ? new Date(device.createdAt).toLocaleString('es-ES') : 'N/A'; // Eliminado
                     const instanceId = device.instancia_id || btoa(device.number || '');
                     
 
@@ -1237,8 +1234,14 @@
                     row.innerHTML = `
                         <td>${device.name || 'Dispositivo'}</td>
                         <td>${device.number || 'N/A'}</td>
-                        <td>${createdDate}</td>
-                        <td title="${instanceId}">${instanceId.substring(0, 10)}...</td>
+                        <td title="${instanceId}" style="font-family: monospace; font-size: 0.9em;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 5px;">
+                                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; display: inline-block;">${instanceId}</span>
+                                <button class="btn-action" onclick="copyToClipboard('${instanceId}')" title="Copiar ID" style="width: 24px; height: 24px; background: #6c757d; font-size: 10px; margin: 0;">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </td>
                         <td>
                             <span class="status-badge ${statusClass}" style="${pendingStyle}">
                                 ${statusText}
@@ -1266,7 +1269,7 @@
                 totalRecords.textContent = '0 registros en total';
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 40px; color: #6c757d;">
+                        <td colspan="5" style="text-align: center; padding: 40px; color: #6c757d;">
                             <i>📱</i> No hay dispositivos registrados
                         </td>
                     </tr>
@@ -1634,7 +1637,9 @@
         }
 
         // Cerrar modal de QR
-        function closeQRModal() {
+        function closeQRModal(cancelConnection = true) {
+            const idToCancel = currentQRId; // Capturar ID antes de limpiar
+            
             document.getElementById('qrModal').classList.remove('show');
             if (qrInterval) {
                 clearInterval(qrInterval);
@@ -1643,6 +1648,15 @@
             currentQRId = null;
             // Limpiar contenedor para evitar "flash" de imágenes anteriores al reabrir
             document.getElementById('qrContainer').innerHTML = '';
+
+            // Cancelar proceso de conexión en el backend si se cierra el modal
+            if (idToCancel && cancelConnection) {
+                console.log('🛑 Cancelando conexión QR para:', idToCancel);
+                fetch(`/api/disconnect?instancia_id=${idToCancel}`, { 
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + sessionData.token }
+                }).catch(err => console.error('Error cancelando conexión:', err));
+            }
         }
 
         // Cargar QR
@@ -1673,7 +1687,7 @@
                         // Ya estaba conectado
                         qrContainer.innerHTML = '<div style="padding: 20px; color: #28a745;"><i>✅</i> ¡Dispositivo ya conectado!</div>';
                         setTimeout(() => {
-                            closeQRModal();
+                            closeQRModal(false); // No desconectar si ya estaba listo
                             refreshDevices();
                         }, 2000);
                     } else {
@@ -1729,7 +1743,7 @@
                             // Actualizar la lista de dispositivos
                             setTimeout(() => {
                                 refreshDevices();
-                                closeQRModal();
+                                closeQRModal(false); // No desconectar, fue éxito
                             }, 2000);
                         }
                     }
@@ -1746,6 +1760,45 @@
             if (uptimeInterval) clearInterval(uptimeInterval);
             if (socket) socket.disconnect();
             window.location.href = '/login.html';
+        }
+
+        // Función para copiar al portapapeles
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                showToast('ID copiado al portapapeles', 'success');
+            }, function(err) {
+                console.error('Async: Could not copy text: ', err);
+                fallbackCopyTextToClipboard(text);
+            });
+        }
+
+        function fallbackCopyTextToClipboard(text) {
+            var textArea = document.createElement("textarea");
+            textArea.value = text;
+            
+            // Avoid scrolling to bottom
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                var successful = document.execCommand('copy');
+                var msg = successful ? 'successful' : 'unsuccessful';
+                if (successful) {
+                    showToast('ID copiado al portapapeles', 'success');
+                } else {
+                    showToast('Error al copiar ID', 'error');
+                }
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+                showToast('Error al copiar ID', 'error');
+            }
+
+            document.body.removeChild(textArea);
         }
 
         // Inicializar
