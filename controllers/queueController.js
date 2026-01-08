@@ -80,7 +80,7 @@ exports.addToQueue = (req, res) => {
     db.query(insertQuery, [instancia_id, number, msgContent, tipo, mediaUrl, caption, sender], (err, result) => {
       if (err) {
         console.error('Error al encolar:', err);
-        return res.status(500).json({ error: 'Error al guardar mensaje en cola' });
+        return res.status(500).json({ error: 'Error al guardar mensaje en cola', details: err.sqlMessage || err.message });
       }
       res.json({ success: true, queue_id: result.insertId, message: 'Mensaje encolado', from: sender });
 
