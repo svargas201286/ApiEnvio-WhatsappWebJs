@@ -9,41 +9,59 @@ const PROCESS_INTERVAL = 2000; // Verificar cola cada 2 segundos
 // Estado en memoria para bloquear instancias que están procesando
 const processingInstances = new Set();
 
+const fs = require('fs');
+const path = require('path');
+
 // Añadir mensaje a la cola
 exports.addToQueue = (req, res) => {
-  const { number, message, mediatype, media, filename, caption, fromNumber } = req.body;
+  const { number, message, mediatype, media, filename, fromNumber, mimetype } = req.body;
+  let { caption } = req.body;
 
-  // Auth middleware ya validó el token y adjuntó req.user
-  // Si no viene fromNumber, usamos el del usuario (si tiene uno asignado) o se determina al enviar
-  let sender = fromNumber;
-
-  if (!sender && req.user && req.user.numero) {
-    sender = req.user.numero;
+  // Si no viene caption pero sí message (mapeo del frontend), usar message
+  if (!caption && message) {
+    caption = message;
   }
 
-  // Si sigue sin sender, intentamos buscar el dispositivo por instancia_id si viene en query (caso raro en POST user)
-  // Para simplificar, asumimos que el frontend envía 'fromNumber' o el usuario tiene 'numero'.
-  // Si es multi-device, el frontend DEBE enviar desde qué dispositivo sale.
+  // Auth middleware ya validó el token y adjuntó req.user
+  let sender = fromNumber || (req.user ? req.user.numero : null);
 
   // Validación básica
   if (!number) return res.status(400).json({ error: 'Número de destino requerido' });
 
-  // Determinar tipo
+  // Determinar tipo y manejar media
   let tipo = 'texto';
   let mediaUrl = null;
   let msgContent = message;
 
-  if (req.file) {
-    tipo = req.file.mimetype.includes('pdf') ? 'documento' : 'media'; // Simplificación básica
-    mediaUrl = req.file.path; // Guardamos la ruta del archivo local
-  } else if (mediatype && media) {
-    tipo = mediatype === 'document' ? 'documento' : 'media';
-    mediaUrl = media; // Base64 fallback (para API remota si se usara)
+  // Asegurar directorio de uploads
+  const uploadDir = path.join(__dirname, '../public/uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
   }
 
-  // Buscamos la instancia_id asociada al sender (numero)
-  // O si el sender ES la instancia_id (caso numérico nuevo).
-  // Necesitamos saber la instancia_id para agrupar la cola.
+  if (req.file) {
+    // Caso Multipart (Formulario web)
+    tipo = req.file.mimetype.includes('pdf') || req.file.mimetype.includes('xml') ? 'documento' : 'media';
+    mediaUrl = req.file.path.replace(/\\\\/g, '/'); // Normalizar path
+  } else if (media) {
+    // Caso JSON Base64 (API externa PHP)
+    tipo = mediatype === 'document' ? 'documento' : 'media';
+
+    // Guardar Base64 en disco para evitar truncamiento en DB y preservar filename
+    try {
+      const buffer = Buffer.from(media, 'base64');
+      // Usar nombre original o generar uno seguro
+      const safeFilename = filename ? filename.replace(/[^a-zA-Z0-9.-]/g, '_') : `file_${Date.now()}.${mimetype === 'application/pdf' ? 'pdf' : 'jpg'}`;
+      const filePath = path.join(uploadDir, safeFilename);
+
+      fs.writeFileSync(filePath, buffer);
+      mediaUrl = filePath.replace(/\\\\/g, '/'); // Guardar ruta absoluta/relativa
+
+    } catch (e) {
+      console.error('Error guardando archivo base64:', e);
+      return res.status(500).json({ error: 'Error procesando archivo media' });
+    }
+  }
 
   const findInstanceQuery = 'SELECT instancia_id FROM dispositivos_whatsapp WHERE numero = ? OR instancia_id = ? LIMIT 1';
   db.query(findInstanceQuery, [sender, sender], (err, results) => {
@@ -52,6 +70,7 @@ exports.addToQueue = (req, res) => {
 
     const instancia_id = results[0].instancia_id;
 
+    // Volvemos al INSERT original (sin filename/mimetype) porque no se pudo alterar la DB
     const insertQuery = `
             INSERT INTO cola_mensajes 
             (instancia_id, numero_destino, mensaje, tipo, media_url, caption, from_number, estado)
@@ -65,7 +84,6 @@ exports.addToQueue = (req, res) => {
       }
       res.json({ success: true, queue_id: result.insertId, message: 'Mensaje encolado', from: sender });
 
-      // Trigger proactivo del procesador (o dejar que el intervalo lo coja)
       processQueue();
     });
   });
@@ -160,11 +178,14 @@ async function processInstanceQueue(instancia_id) {
             const parts = msg.media_url.split(',');
             const mime = parts[0].match(/:(.*?);/)[1];
             const data = parts[1];
-            mediaObj = new MessageMedia(mime, data, msg.caption || 'file');
+            mediaObj = new MessageMedia(mime, data, msg.filename || msg.caption || 'file');
           } else {
-            // Fallback
-            const mime = msg.tipo === 'documento' ? 'application/pdf' : 'image/jpeg';
-            mediaObj = new MessageMedia(mime, msg.media_url, msg.caption || 'file');
+            // Fallback: Usar mimetype/filename guardado en BD, o inferir
+            let mime = msg.mimetype;
+            if (!mime) {
+              mime = msg.tipo === 'documento' ? 'application/pdf' : 'image/jpeg';
+            }
+            mediaObj = new MessageMedia(mime, msg.media_url, msg.filename || msg.caption || 'file');
           }
 
           await clientData.client.sendMessage(`${msg.numero_destino}@c.us`, mediaObj, { caption: msg.caption });

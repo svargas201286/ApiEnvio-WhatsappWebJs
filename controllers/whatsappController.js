@@ -110,7 +110,19 @@ async function ensureClient(numero, instancia_id) {
       takeoverOnConflict: true,
       takeoverTimeoutMs: 0,
       webVersionCache: { type: 'remote', remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html' },
-      puppeteer: { executablePath, headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] }
+      puppeteer: {
+        executablePath,
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu'
+        ]
+      }
     });
 
     clients[instancia_id] = { client, numero, ready: false, state: 'INIT', initializedAt: Date.now() };

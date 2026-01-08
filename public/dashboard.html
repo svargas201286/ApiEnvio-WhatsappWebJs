@@ -1700,12 +1700,27 @@
                         }, 2000);
                     } else {
                         // Aún no hay QR (está cargando), reintentar
-                        if (retry < 20) { // Reintentar hasta 20 veces (aprox 1 minuto)
+                        if (retry < 10) { // Reintentar hasta 10 veces (aprox 30 seg)
                             const statusText = data.state === 'INIT' ? 'Iniciando...' : (data.state || 'Cargando...');
-                            qrContainer.innerHTML = `<div style="padding: 20px; color: #6c757d;"><i>⏳</i> ${statusText}<br><small>Intento ${retry + 1}...</small></div>`;
+                            qrContainer.innerHTML = `<div style="padding: 20px; color: #6c757d;"><i>⏳</i> ${statusText}<br><small>Intento ${retry + 1}/10...</small></div>`;
                             setTimeout(() => loadQR(id, retry + 1), 3000);
                         } else {
-                            qrContainer.innerHTML = '<div style="padding: 20px; color: #dc3545;"><i>❌</i> Tardó demasiado. Cierra y vuelve a intentar.</div>';
+                            // Si tarda mucho, FORZAR REINICIO
+                            qrContainer.innerHTML = '<div style="padding: 20px; color: #ffca2c;"><i>⚠️</i> Tardando mucho... <br><small>Forzando reinicio del proceso...</small></div>';
+                            console.log('🔄 Forzando reinicio por timeout...');
+                            
+                            // Forzar desconexión para limpiar proceso zombie
+                            fetch(`/api/disconnect?instancia_id=${id}`, { 
+                                method: 'POST',
+                                headers: { 'Authorization': 'Bearer ' + sessionData.token }
+                            })
+                            .then(() => {
+                                // Reintentar desde cero después de 2s
+                                setTimeout(() => loadQR(id, 0), 2000);
+                            })
+                            .catch(err => {
+                                qrContainer.innerHTML = '<div style="padding: 20px; color: #dc3545;"><i>❌</i> Error al reiniciar. Cierra y prueba de nuevo.</div>';
+                            });
                         }
                     }
                 } else {

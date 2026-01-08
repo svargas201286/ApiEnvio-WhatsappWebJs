@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+           <ext:UBLExtensions>
+              <ext:UBLExtension>
+                 <ext:ExtensionContent><ds:Signature Id="SignatureSP"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><ds:Reference URI=""><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><ds:DigestValue>dur5Uo3VUaSTCxRu9dh3fTas6Jw=</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>lHYdk7/RcBabzvTB7hrDgJ/8x0MVmBgJ0J88uATrAjyYVy3MvSvy4HVYRTEdxMNMOgaqzQdUZRg9VAqwnvGG9JMORy+z+iyW0L1PdeLP6rGTj0LHY8irK9g7/UDL3wJCygX77K2Tt7pxe3vCRgqVbuR3Yo46ofeuRW7sR8PYmFm1Dtpfa+JBRgGvMtGtQKLYrU8R6eKcFFmG3nIAhZADbVmzCBJzU1Og+mwFgTd5BjLP/Po6D8dFJQHSFNXKUaVXDF3ViJ35BwjyRvLCd5vyFLPUWJd/zAZF4Rh/unxxqqS7P0xkGeAF8ZGyCsk06D12wlBpfAEnOXXwrotMh6OsgQ==</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509Certificate>MIIE+DCCA+CgAwIBAgIJANmJEZyxshk1MA0GCSqGSIb3DQEBBQUAMIIBDTEbMBkGCgmSJomT8ixkARkWC0xMQU1BLlBFIFNBMQswCQYDVQQGEwJQRTENMAsGA1UECAwETElNQTENMAsGA1UEBwwETElNQTEYMBYGA1UECgwPVFUgRU1QUkVTQSBTLkEuMUUwQwYDVQQLDDxETkkgOTk5OTk5OSBSVUMgMTA0MzUzNTAzNzggLSBDRVJUSUZJQ0FETyBQQVJBIERFTU9TVFJBQ0nDk04xRDBCBgNVBAMMO05PTUJSRSBSRVBSRVNFTlRBTlRFIExFR0FMIC0gQ0VSVElGSUNBRE8gUEFSQSBERU1PU1RSQUNJw5NOMRwwGgYJKoZIhvcNAQkBFg1kZW1vQGxsYW1hLnBlMB4XDTIxMDIwNTA0NTIzNloXDTIzMDIwNTA0NTIzNlowggENMRswGQYKCZImiZPyLGQBGRYLTExBTUEuUEUgU0ExCzAJBgNVBAYTAlBFMQ0wCwYDVQQIDARMSU1BMQ0wCwYDVQQHDARMSU1BMRgwFgYDVQQKDA9UVSBFTVBSRVNBIFMuQS4xRTBDBgNVBAsMPEROSSA5OTk5OTk5IFJVQyAxMDQzNTM1MDM3OCAtIENFUlRJRklDQURPIFBBUkEgREVNT1NUUkFDScOTTjFEMEIGA1UEAww7Tk9NQlJFIFJFUFJFU0VOVEFOVEUgTEVHQUwgLSBDRVJUSUZJQ0FETyBQQVJBIERFTU9TVFJBQ0nDk04xHDAaBgkqhkiG9w0BCQEWDWRlbW9AbGxhbWEucGUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDJLu3vylHN1MtDLucLcailS+KRQU8qd0A6lkTYTaoX4J2Mp0bNp0VFGkFsyck2Ggs6EtHzUhft5u9COLE4i0sc/Hctnld7YFM9ouwGfQyjkn2d8WI2Q7xaNIIwoODU7GfShyyveRoYp7J4pJAabdJoYJt/lVcYAxrOwvZDrdLV+uoskmu1q9tZqzcqu+ynB9d7j/nUj4tXE53+EJ6hyTalIjwzEtBfS4m9SXw/OqFzwkJ5gyLh5DIcqDaotrWVQQ5I+BrT3Mluj7YJhn0L01MhsF6q+avpsEeEIdmP3afsEuDakY2BtfK1Nhx75jEfO9rR62tFHCUxHJCY1GwYXSV7AgMBAAGjVzBVMB0GA1UdDgQWBBRAFDSzAJbZ85dlA1q6TocCVchnOjAfBgNVHSMEGDAWgBRAFDSzAJbZ85dlA1q6TocCVchnOjATBgNVHSUEDDAKBggrBgEFBQcDATANBgkqhkiG9w0BAQUFAAOCAQEAFUC7Ci+Ic58M1z7ox0saxutFmKHayTGlahwsgt5U0Nfuz7Mon3heGZJoPX+2lztgdnNgAsK9BF+XS+8bIGVTMLoJfUegwaj+xo8uK1YhbvcbFTtYHFE5xQMNilbyCeZUlx3ARxwju5HMJuX2rOtnNuQtoa+iKY962PgWaJtJp/HVwRrCx72jOnP/GbOx1dktiUDMOJ8/s1oxUgXtIstEEs5tfDvQC8A07wUqKZhavVImSQcTnhAGTlmFiuJdko6Z6FcAkYKVgjtUFgxpml1wuQYTozw6uTdm722dU5V00DpWerkgYA/PzltfdARFsRLupX2aCoaof4iA9X3KrVEDtg==</ds:X509Certificate></ds:X509Data></ds:KeyInfo></ds:Signature></ext:ExtensionContent>
+              </ext:UBLExtension>
+           </ext:UBLExtensions>
+           <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+           <cbc:CustomizationID>2.0</cbc:CustomizationID>
+           <cbc:ID>F001-2</cbc:ID>
+           <cbc:IssueDate>2026-01-08</cbc:IssueDate>
+           <cbc:IssueTime>00:00:00</cbc:IssueTime>
+           <cbc:DueDate>2026-01-08</cbc:DueDate>
+           <cbc:InvoiceTypeCode listID="0101">01</cbc:InvoiceTypeCode>
+
+           <cbc:Note languageLocaleID="1000"><![CDATA[DOS MIL TRESCIENTOS DOS  CON 00/100 SOLES]]></cbc:Note><cbc:DocumentCurrencyCode>PEN</cbc:DocumentCurrencyCode>
+           <cac:Signature>
+              <cbc:ID>10439142443</cbc:ID>
+              <cbc:Note><![CDATA[SISTEMAS//VARGAS]]></cbc:Note>
+              <cac:SignatoryParty>
+                 <cac:PartyIdentification>
+                    <cbc:ID>10439142443</cbc:ID>
+                 </cac:PartyIdentification>
+                 <cac:PartyName>
+                     <cbc:Name><![CDATA[VARGAS LAINEZ SAMUEL ABEL, Sucursal SISTEMAS//VARGAS]]></cbc:Name>
+                 </cac:PartyName>
+              </cac:SignatoryParty>
+              <cac:DigitalSignatureAttachment>
+                 <cac:ExternalReference>
+                    <cbc:URI>#SIGN-EMPRESA</cbc:URI>
+                 </cac:ExternalReference>
+              </cac:DigitalSignatureAttachment>
+           </cac:Signature>
+           <cac:AccountingSupplierParty>
+              <cac:Party>
+                 <cac:PartyIdentification>
+                    <cbc:ID schemeID="6">10439142443</cbc:ID>
+                 </cac:PartyIdentification>
+                 <cac:PartyName>
+                    <cbc:Name><![CDATA[VARGAS LAINEZ SAMUEL ABEL, Sucursal SISTEMAS//VARGAS]]></cbc:Name>
+                 </cac:PartyName>
+                 <cac:PartyLegalEntity>
+                    <cbc:RegistrationName><![CDATA[VARGAS LAINEZ SAMUEL ABEL]]></cbc:RegistrationName>
+                    <cac:RegistrationAddress>
+                       <cbc:ID>050101</cbc:ID>
+                       <cbc:AddressTypeCode>0000</cbc:AddressTypeCode>
+                       <cbc:CitySubdivisionName>NONE</cbc:CitySubdivisionName>
+                       <cbc:CityName>HUAMANGA</cbc:CityName>
+                       <cbc:CountrySubentity>AYACUCHO</cbc:CountrySubentity>
+                       <cbc:District>AYACUCHO</cbc:District>
+                       <cac:AddressLine>
+                          <cbc:Line><![CDATA[A.H. Covadonga Mz. R2 Lt.Nº09]]></cbc:Line>
+                       </cac:AddressLine>
+                       <cac:Country>
+                          <cbc:IdentificationCode>PE</cbc:IdentificationCode>
+                       </cac:Country>
+                    </cac:RegistrationAddress>
+                 </cac:PartyLegalEntity>
+              </cac:Party>
+           </cac:AccountingSupplierParty>
+           <cac:AccountingCustomerParty>
+              <cac:Party>
+                 <cac:PartyIdentification>
+                    <cbc:ID schemeID="6">20603673574</cbc:ID>
+                 </cac:PartyIdentification>
+                 <cac:PartyLegalEntity>
+                    <cbc:RegistrationName><![CDATA[REUBEN INGENIEROS S.A.C.]]></cbc:RegistrationName>
+                    <cac:RegistrationAddress>
+                       <cac:AddressLine>
+                          <cbc:Line><![CDATA[AV. PROGRESO MZA. D LOTE 05 ]]></cbc:Line>
+                       </cac:AddressLine>
+                       <cac:Country>
+                          <cbc:IdentificationCode>PE</cbc:IdentificationCode>
+                       </cac:Country>
+                    </cac:RegistrationAddress>
+                 </cac:PartyLegalEntity>
+              </cac:Party>
+           </cac:AccountingCustomerParty><cac:PaymentTerms>
+               <cbc:ID>FormaPago</cbc:ID>
+               <cbc:PaymentMeansID>Contado</cbc:PaymentMeansID>
+           </cac:PaymentTerms><cac:TaxTotal>
+              <cbc:TaxAmount currencyID="PEN">351.15</cbc:TaxAmount><cac:TaxSubtotal>
+                 <cbc:TaxableAmount currencyID="PEN">1950.85</cbc:TaxableAmount>
+                 <cbc:TaxAmount currencyID="PEN">351.15</cbc:TaxAmount>
+                 <cac:TaxCategory>
+                    <cac:TaxScheme>
+                       <cbc:ID>1000</cbc:ID>
+                       <cbc:Name>IGV</cbc:Name>
+                       <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+                    </cac:TaxScheme>
+                 </cac:TaxCategory>
+              </cac:TaxSubtotal></cac:TaxTotal>
+           <cac:LegalMonetaryTotal>
+              <cbc:LineExtensionAmount currencyID="PEN">1950.85</cbc:LineExtensionAmount>
+              <cbc:TaxInclusiveAmount currencyID="PEN">2302</cbc:TaxInclusiveAmount>
+              <cbc:PayableAmount currencyID="PEN">2302</cbc:PayableAmount>
+           </cac:LegalMonetaryTotal><cac:InvoiceLine>
+                  <cbc:ID>1</cbc:ID>
+                  <cbc:InvoicedQuantity unitCode="ZZ">1</cbc:InvoicedQuantity>
+                  <cbc:LineExtensionAmount currencyID="PEN">1357.63</cbc:LineExtensionAmount>
+                  <cac:PricingReference>
+                     <cac:AlternativeConditionPrice>
+                        <cbc:PriceAmount currencyID="PEN">1602</cbc:PriceAmount>
+                        <cbc:PriceTypeCode>01</cbc:PriceTypeCode>
+                     </cac:AlternativeConditionPrice>
+                  </cac:PricingReference><cac:TaxTotal>
+                     <cbc:TaxAmount currencyID="PEN">244.37</cbc:TaxAmount>
+                     <cac:TaxSubtotal>
+                        <cbc:TaxableAmount currencyID="PEN">1357.63</cbc:TaxableAmount>
+                        <cbc:TaxAmount currencyID="PEN">244.37</cbc:TaxAmount>
+                        <cac:TaxCategory>
+                           <cbc:Percent>18</cbc:Percent>
+                           <cbc:TaxExemptionReasonCode>10</cbc:TaxExemptionReasonCode>
+                           <cac:TaxScheme>
+                              <cbc:ID>1000</cbc:ID>
+                              <cbc:Name>IGV</cbc:Name>
+                              <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+                           </cac:TaxScheme>
+                        </cac:TaxCategory>
+                     </cac:TaxSubtotal></cac:TaxTotal>
+                  <cac:Item>
+                     <cbc:Description><![CDATA[Registro de transferencias entre áreas (producción, lavandería, almacén, tienda).  - tiempo de desarrollo 14 días hábiles ]]></cbc:Description>
+                     <cac:SellersItemIdentification>
+                        <cbc:ID>FMZSRJN</cbc:ID>
+                     </cac:SellersItemIdentification>
+                  </cac:Item>
+                  <cac:Price>
+                     <cbc:PriceAmount currencyID="PEN">1357.62712</cbc:PriceAmount>
+                  </cac:Price>
+               </cac:InvoiceLine><cac:InvoiceLine>
+                  <cbc:ID>2</cbc:ID>
+                  <cbc:InvoicedQuantity unitCode="ZZ">1</cbc:InvoicedQuantity>
+                  <cbc:LineExtensionAmount currencyID="PEN">593.22</cbc:LineExtensionAmount>
+                  <cac:PricingReference>
+                     <cac:AlternativeConditionPrice>
+                        <cbc:PriceAmount currencyID="PEN">700</cbc:PriceAmount>
+                        <cbc:PriceTypeCode>01</cbc:PriceTypeCode>
+                     </cac:AlternativeConditionPrice>
+                  </cac:PricingReference><cac:TaxTotal>
+                     <cbc:TaxAmount currencyID="PEN">106.78</cbc:TaxAmount>
+                     <cac:TaxSubtotal>
+                        <cbc:TaxableAmount currencyID="PEN">593.22</cbc:TaxableAmount>
+                        <cbc:TaxAmount currencyID="PEN">106.78</cbc:TaxAmount>
+                        <cac:TaxCategory>
+                           <cbc:Percent>18</cbc:Percent>
+                           <cbc:TaxExemptionReasonCode>10</cbc:TaxExemptionReasonCode>
+                           <cac:TaxScheme>
+                              <cbc:ID>1000</cbc:ID>
+                              <cbc:Name>IGV</cbc:Name>
+                              <cbc:TaxTypeCode>VAT</cbc:TaxTypeCode>
+                           </cac:TaxScheme>
+                        </cac:TaxCategory>
+                     </cac:TaxSubtotal></cac:TaxTotal>
+                  <cac:Item>
+                     <cbc:Description><![CDATA[Registro de prendas enviadas a lavado, control de costos, tiempos y estados (pendiente, en proceso, listo).]]></cbc:Description>
+                     <cac:SellersItemIdentification>
+                        <cbc:ID>9W4SI3X</cbc:ID>
+                     </cac:SellersItemIdentification>
+                  </cac:Item>
+                  <cac:Price>
+                     <cbc:PriceAmount currencyID="PEN">593.22034</cbc:PriceAmount>
+                  </cac:Price>
+               </cac:InvoiceLine></Invoice>
