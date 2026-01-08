@@ -3,7 +3,7 @@ const whatsappController = require('./whatsappController');
 const { MessageMedia } = require('whatsapp-web.js');
 
 // Configuración
-const MESSAGE_DELAY = 15000; // 15 segundos entre mensajes por instancia
+const MESSAGE_DELAY = 5000; // 5 segundos entre mensajes por instancia
 const PROCESS_INTERVAL = 2000; // Verificar cola cada 2 segundos
 
 // Estado en memoria para bloquear instancias que están procesando
