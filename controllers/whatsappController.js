@@ -269,7 +269,7 @@ exports.sendMessage = async (req, res) => {
     const state = clients[device.instancia_id];
     if (!state || !state.ready) return res.status(400).json({ error: 'Sesión no lista' });
 
-    state.client.sendMessage(`${number}@c.us`, message)
+    state.client.sendMessage(`${number}@c.us`, message, { sendSeen: false })
       .then(() => res.json({ success: true, from: device.numero }))
       .catch(err => res.status(500).json({ error: err.message }));
   } catch (error) {
@@ -298,7 +298,7 @@ exports.sendDocument = async (req, res) => {
     if (!state || !state.ready) return res.status(400).json({ error: 'Sesión no lista' });
 
     const messageMedia = new MessageMedia(mediatype === 'document' ? 'application/pdf' : mediatype, media, filename);
-    state.client.sendMessage(`${number}@c.us`, messageMedia, { caption })
+    state.client.sendMessage(`${number}@c.us`, messageMedia, { caption, sendSeen: false })
       .then(() => res.json({ success: true, from: device.numero }))
       .catch(err => res.status(500).json({ error: err.message }));
   } catch (error) {

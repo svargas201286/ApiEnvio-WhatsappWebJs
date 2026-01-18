@@ -160,7 +160,7 @@ async function processInstanceQueue(instancia_id) {
           // Mejor llamar logica directa. Accedemos a clients[instancia_id]
           const clients = whatsappController.getClients();
           const clientData = clients[instancia_id];
-          await clientData.client.sendMessage(`${msg.numero_destino}@c.us`, msg.mensaje);
+          await clientData.client.sendMessage(`${msg.numero_destino}@c.us`, msg.mensaje, { sendSeen: false });
           success = true;
 
         } else if (msg.tipo === 'media' || msg.tipo === 'documento') {
@@ -188,7 +188,7 @@ async function processInstanceQueue(instancia_id) {
             mediaObj = new MessageMedia(mime, msg.media_url, msg.filename || msg.caption || 'file');
           }
 
-          await clientData.client.sendMessage(`${msg.numero_destino}@c.us`, mediaObj, { caption: msg.caption });
+          await clientData.client.sendMessage(`${msg.numero_destino}@c.us`, mediaObj, { caption: msg.caption, sendSeen: false });
 
           // Opcional: Borrar archivo temporal después de envío exitoso?
           // Por ahora lo dejamos para historial o debug audit
