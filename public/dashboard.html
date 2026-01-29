@@ -1018,7 +1018,12 @@
                         'Content-Type': 'application/json',
                         'Authorization': 'Bearer ' + sessionData.token
                     },
-                    body: JSON.stringify({ number, message, fromNumber })
+                    body: JSON.stringify({ 
+                        number, 
+                        message, 
+                        fromNumber,
+                        wait: true // Solicitar espera
+                    })
                 });
                 
                 const responseData = await response.json();
@@ -1053,6 +1058,7 @@
             formData.append('message', caption);
             formData.append('media', file);
             formData.append('fromNumber', fromNumber);
+            formData.append('wait', 'true'); // Solicitar espera de confirmación
             
             try {
                 const response = await fetch('/api/send-media', {
@@ -1096,6 +1102,7 @@
             formData.append('message', caption);
             formData.append('pdf', file);
             formData.append('fromNumber', fromNumber);
+            formData.append('wait', 'true'); // Solicitar espera
             
             try {
                 const response = await fetch('/api/send-whatsap', {
@@ -1232,12 +1239,15 @@
                         statusClass = 'status-active';
                         statusText = 'Sesión abierta';
                     } else if (device.state === 'conectando' || device.state === 'INIT') {
-                        statusClass = 'status-pending'; // Necesitamos definir este estilo CSS si no existe, o usar uno similar
+                        statusClass = 'status-pending';
                         statusText = '⏳ Conectando...';
+                    } else if (device.state === 'AUTHENTICATED' || device.state === 'sincronizando') {
+                        statusClass = 'status-pending';
+                        statusText = '🔄 Sincronizando...';
                     }
 
                     // Definir estilo inline para pending si no existe en CSS
-                    const pendingStyle = (device.state === 'conectando' || device.state === 'INIT') ? 'background: #ffc107; color: #000;' : '';
+                    const pendingStyle = (device.state === 'conectando' || device.state === 'INIT' || device.state === 'AUTHENTICATED' || device.state === 'sincronizando') ? 'background: #ffc107; color: #000;' : '';
 
                     row.innerHTML = `
                         <td>${device.name || 'Dispositivo'}</td>
@@ -1454,21 +1464,22 @@
                         'Authorization': 'Bearer ' + sessionData.token
                     },
                     body: JSON.stringify({
-                        instancia_id: currentEditDevice,
+                        identifier: currentEditDevice, // ID original (para buscar)
+                        instancia_id: instancia_id,    // Nuevo ID (para actualizar)
                         nombre: nombre
                     })
                 });
                 
                 if (response.ok) {
-                    alert('Dispositivo actualizado correctamente');
+                    showToast('Dispositivo actualizado correctamente', 'success');
                     closeEditDeviceModal();
                     refreshDevices();
                 } else {
                     const error = await response.json();
-                    alert('Error al actualizar dispositivo: ' + (error.error || 'Error desconocido'));
+                    showToast('Error al actualizar dispositivo: ' + (error.error || 'Error desconocido'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error: ' + error.message, 'error');
             }
         }
 
@@ -1657,14 +1668,8 @@
             // Limpiar contenedor para evitar "flash" de imágenes anteriores al reabrir
             document.getElementById('qrContainer').innerHTML = '';
 
-            // Cancelar proceso de conexión en el backend si se cierra el modal
-            if (idToCancel && cancelConnection) {
-                console.log('🛑 Cancelando conexión QR para:', idToCancel);
-                fetch(`/api/disconnect?instancia_id=${idToCancel}`, { 
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + sessionData.token }
-                }).catch(err => console.error('Error cancelando conexión:', err));
-            }
+            // MODIFICADO: No desconectar al cerrar el modal para permitir que siga cargando en segundo plano
+            console.log('ℹ️ Modal cerrado. El proceso continúa en segundo plano para:', idToCancel);
         }
 
         // Cargar QR
@@ -1700,9 +1705,13 @@
                         }, 2000);
                     } else {
                         // Aún no hay QR (está cargando), reintentar
-                        if (retry < 10) { // Reintentar hasta 10 veces (aprox 30 seg)
-                            const statusText = data.state === 'INIT' ? 'Iniciando...' : (data.state || 'Cargando...');
-                            qrContainer.innerHTML = `<div style="padding: 20px; color: #6c757d;"><i>⏳</i> ${statusText}<br><small>Intento ${retry + 1}/10...</small></div>`;
+                        if (retry < 60) { 
+                            let statusText = 'Cargando...';
+                            if (data.state === 'INIT') statusText = 'Iniciando...';
+                            else if (data.state === 'AUTHENTICATED') statusText = '¡Escaneado! Sincronizando...';
+                            else if (data.state === 'QR_READY') statusText = 'Generando QR...';
+
+                            qrContainer.innerHTML = `<div style="padding: 20px; color: #6c757d;"><i>⏳</i> ${statusText}<br><small>Intento ${retry + 1}/60...</small><br><small style="font-size:10px; color:#999">Esto puede tardar unos minutos si hay muchos chats...</small></div>`;
                             setTimeout(() => loadQR(id, retry + 1), 3000);
                         } else {
                             // Si tarda mucho, FORZAR REINICIO
@@ -1826,6 +1835,39 @@
 
         // Inicializar
         checkSession();
+
+        // Inicializar Socket.IO
+        function initSocket() {
+            // Usar la variable global 'socket' ya declarada arriba
+            if (!socket) {
+                socket = io();
+                
+                socket.on('connect', () => {
+                    console.log('🟢 Conectado al servidor de eventos');
+                });
+
+                socket.on('deviceStatusChanged', (data) => {
+                    console.log('📡 Evento recibido:', data);
+                    refreshDevices();
+
+                    // Si hay un modal QR abierto para este dispositivo y se conectó
+                    if (data.status === 'conectado' && currentQRId === data.instancia_id) {
+                        const qrContainer = document.getElementById('qrContainer');
+                        if (qrContainer) {
+                            qrContainer.innerHTML = '<div style="padding: 20px; color: #28a745;"><i>✅</i> ¡Sincronización remota detectada!</div>';
+                            setTimeout(() => {
+                                closeQRModal(false);
+                            }, 1500); // 1.5 segundos para cerrar
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Llamar a initSocket si hay sesión
+        if (localStorage.getItem('wa_session')) {
+            initSocket();
+        }
     </script>
 </body>
 </html>

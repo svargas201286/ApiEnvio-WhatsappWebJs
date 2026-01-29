@@ -84,7 +84,8 @@ db.query(`CREATE TABLE IF NOT EXISTS dispositivos_whatsapp (
 async function initializeWhatsApp() {
   try {
     // Buscar dispositivos existentes en la base de datos
-    db.query('SELECT numero, instancia_id FROM dispositivos_whatsapp', async (err, results) => {
+    // Buscar dispositivos que NO están explícitamente desconectados
+    db.query('SELECT numero, instancia_id FROM dispositivos_whatsapp WHERE estado != "desconectado"', async (err, results) => {
       if (err) {
         console.error('Error al obtener dispositivos:', err);
         return;
@@ -109,14 +110,17 @@ async function initializeWhatsApp() {
 
         for (const device of results) {
           const { numero, instancia_id } = device;
-          console.log(`🔗 [STARTUP] Intentando conectar: ${numero} (${instancia_id})`);
+          console.log(`🔗 [STARTUP] Disparando inicio de: ${numero} (${instancia_id})`);
 
-          try {
-            await whatsappController.ensureClient(numero, instancia_id);
-            console.log(`✅ [STARTUP] Iniciado correctamente: ${numero}`);
-          } catch (error) {
-            console.error(`❌ [STARTUP] Error al iniciar ${numero}:`, error.message);
-          }
+          // NO usamos await aquí para no bloquear el siguiente.
+          // Se inicia en "fondo", y el siguiente comienza en 10s.
+          whatsappController.ensureClient(numero, instancia_id)
+            .then(() => console.log(`✅ [STARTUP] Checkpoint de inicio: ${numero}`))
+            .catch(error => console.error(`❌ [STARTUP] Error al iniciar ${numero}:`, error.message));
+
+          // Esperar 10 segundos antes de lanzar el siguiente para no saturar CPU/RAM
+          console.log(`⏳ Esperando 10s antes del siguiente dispositivo...`);
+          await new Promise(resolve => setTimeout(resolve, 10000));
         }
         console.log('🏁 [STARTUP] Inicialización masiva completada.');
       } else {

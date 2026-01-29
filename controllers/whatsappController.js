@@ -81,6 +81,10 @@ setInterval(cleanupUnconnectedClients, 30 * 60 * 1000);
 function getChromePath() {
   if (process.env.CHROME_PATH && fs.existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
   const candidates = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
     'C:/Program Files/Microsoft/Edge/Application/msedge.exe'
@@ -109,10 +113,15 @@ async function ensureClient(numero, instancia_id) {
       restartOnAuthFail: true,
       takeoverOnConflict: true,
       takeoverTimeoutMs: 0,
-      webVersionCache: { type: 'remote', remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html' },
+      webVersionCache: {
+        type: 'local'
+      },
+      // Configuración para evitar cuelgues de historial
+      authTimeoutMs: 60000,
+      qrMaxRetries: 5,
       puppeteer: {
         executablePath,
-        headless: true,
+        headless: true, // Usar true para compatibilidad, o 'new' en versiones recientes
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -120,7 +129,16 @@ async function ensureClient(numero, instancia_id) {
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
-          '--disable-gpu'
+          '--disable-gpu',
+          '--disable-extensions',
+          '--disable-software-rasterizer',
+          '--disable-features=IsolateOrigins,site-per-process',
+          '--mute-audio',
+          '--disable-web-security',
+          '--no-default-browser-check',
+          '--disable-infobars',
+          '--window-size=1280,720',
+          '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
       }
     });
@@ -129,15 +147,38 @@ async function ensureClient(numero, instancia_id) {
 
     client.on('qr', async qr => {
       if (clients[instancia_id]) {
+        console.log(`📡 QR Received for ${instancia_id}`);
         clients[instancia_id].qr = await qrcode.toDataURL(qr);
         clients[instancia_id].state = 'QR';
         db.query('UPDATE dispositivos_whatsapp SET qr_code = ?, ultima_actividad = NOW() WHERE instancia_id = ?', [clients[instancia_id].qr, instancia_id]);
       }
     });
 
+    client.on('loading_screen', (percent, message) => {
+      console.log(`⏳ Loading: ${instancia_id} - ${percent}% - ${message}`);
+      if (clients[instancia_id]) {
+        clients[instancia_id].loading_percent = percent;
+        try { require('../main').io.emit('deviceStatusChanged', { instancia_id, status: 'sincronizando', percent }); } catch (e) { }
+      }
+    });
+
+    client.on('change_state', state => {
+      console.log(`🔄 State Changed: ${instancia_id} -> ${state}`);
+    });
+
     client.on('ready', async () => {
       if (clients[instancia_id]) {
         console.log(`✅ Ready: ${instancia_id}`);
+        // Limpiar temporizadores (watchdog y polling)
+        if (clients[instancia_id].readyTimeout) {
+          clearTimeout(clients[instancia_id].readyTimeout);
+          delete clients[instancia_id].readyTimeout;
+        }
+        if (clients[instancia_id].stateCheckInterval) {
+          clearInterval(clients[instancia_id].stateCheckInterval);
+          delete clients[instancia_id].stateCheckInterval;
+        }
+
         clients[instancia_id].ready = true;
         clients[instancia_id].state = 'CONNECTED';
         clients[instancia_id].qr = null;
@@ -150,14 +191,28 @@ async function ensureClient(numero, instancia_id) {
     client.on('disconnected', async (reason) => {
       if (clients[instancia_id]) {
         console.log(`⚠️ Disconnected: ${instancia_id}`, reason);
+        // Limpiar temporizadores en desconexión
+        if (clients[instancia_id].readyTimeout) clearTimeout(clients[instancia_id].readyTimeout);
+        if (clients[instancia_id].stateCheckInterval) clearInterval(clients[instancia_id].stateCheckInterval);
+
         clients[instancia_id].ready = false;
         clients[instancia_id].state = 'DISCONNECTED';
-        db.query('UPDATE dispositivos_whatsapp SET estado = "desconectado", fecha_desconexion = NOW() WHERE instancia_id = ?', [instancia_id]);
+
+        // Solo marcar en BD si no estaba ya marcado como desconectado (para no pisar desconexiones manuall)
+        db.query('UPDATE dispositivos_whatsapp SET estado = "desconectado", fecha_desconexion = NOW() WHERE instancia_id = ? AND estado != "desconectado"', [instancia_id]);
 
         try { require('../main').io.emit('deviceStatusChanged', { instancia_id, numero, status: 'desconectado', ready: false }); } catch (e) { }
 
-        if (!['LOGOUT', 'CLIENT_LOGOUT'].includes(reason)) {
-          setTimeout(() => { if (clients[instancia_id]) clients[instancia_id].client.initialize().catch(() => { }); }, 5000);
+        // SOLO REINTENTAR SI:
+        // 1. No fue un LOGOUT manual
+        // 2. State en memoria sigue existiendo (no ha sido borrado por disconnectDevice)
+        if (!['LOGOUT', 'CLIENT_LOGOUT'].includes(reason) && clients[instancia_id]) {
+          console.log(`🔄 Reintentando conexión para ${instancia_id} en 10s...`);
+          setTimeout(() => {
+            if (clients[instancia_id] && !clients[instancia_id].ready) {
+              clients[instancia_id].client.initialize().catch(() => { });
+            }
+          }, 10000);
         } else {
           delete clients[instancia_id];
         }
@@ -167,14 +222,66 @@ async function ensureClient(numero, instancia_id) {
     client.on('authenticated', () => {
       console.log(`🔑 Authenticated: ${instancia_id}`);
       clients[instancia_id].state = 'AUTHENTICATED';
+      if (clients[instancia_id]) clients[instancia_id].qr = null;
+
+      // Emitir evento para mostrar "Sincronizando..." en la UI
+      try { require('../main').io.emit('deviceStatusChanged', { instancia_id, numero, status: 'sincronizando', ready: false }); } catch (e) { }
+
+      // Polling de estado: Si el evento 'ready' falla pero el navegador dice CONNECTED, forzamos el ready
+      clients[instancia_id].stateCheckInterval = setInterval(async () => {
+        if (!clients[instancia_id] || clients[instancia_id].ready) {
+          if (clients[instancia_id]?.stateCheckInterval) clearInterval(clients[instancia_id].stateCheckInterval);
+          return;
+        }
+        try {
+          const state = await client.getState();
+          console.log(`🔍 Polling State (${instancia_id}): ${state}`);
+          if (state === 'CONNECTED') {
+            console.log(`🚀 Forzando Ready para ${instancia_id} - Detectado CONNECTED vía polling`);
+            if (clients[instancia_id] && clients[instancia_id].stateCheckInterval) {
+              clearInterval(clients[instancia_id].stateCheckInterval);
+            }
+            client.emit('ready');
+          }
+        } catch (e) {
+          console.error(`Error en polling de estado para ${instancia_id}:`, e.message);
+        }
+      }, 5000); // Revisar cada 5 segundos
+
+      // WATCHDOG: Si en 3 minutos no llega a 'ready' después de autenticar, algo salió mal
+      clients[instancia_id].readyTimeout = setTimeout(async () => {
+        if (clients[instancia_id] && !clients[instancia_id].ready) {
+          console.error(`⌛ Timeout esperando 'ready' para ${instancia_id}. Reiniciando cliente...`);
+          try {
+            await clients[instancia_id].client.destroy();
+            delete clients[instancia_id];
+            // Intentar re-inicializar
+            ensureClient(numero, instancia_id);
+          } catch (e) {
+            console.error(`Error reiniciando por timeout:`, e.message);
+          }
+        }
+      }, 3 * 60 * 1000); // 3 minutos
     });
 
     client.on('auth_failure', async (msg) => {
       console.error(`❌ Auth Failure: ${instancia_id}`, msg);
       if (clients[instancia_id]) {
+        // Limpiar temporizadores en fallo
+        if (clients[instancia_id].readyTimeout) clearTimeout(clients[instancia_id].readyTimeout);
+        if (clients[instancia_id].stateCheckInterval) clearInterval(clients[instancia_id].stateCheckInterval);
+
         clients[instancia_id].ready = false;
         clients[instancia_id].state = 'AUTH_FAILURE';
         db.query('UPDATE dispositivos_whatsapp SET estado = "desconectado" WHERE instancia_id = ?', [instancia_id]);
+
+        // Borrar carpeta de sesión corrupta para evitar reintentos infinitos
+        const fs = require('fs');
+        const sessionPath = `./.wwebjs_auth/session-${instancia_id}`;
+        if (fs.existsSync(sessionPath)) {
+          console.log(`🧹 Borrando sesión fallida para evitar bucles: ${instancia_id}`);
+          try { fs.rmSync(sessionPath, { recursive: true, force: true }); } catch (e) { }
+        }
 
         // Emitir evento para quitar spinner de "Conectando"
         try { require('../main').io.emit('deviceStatusChanged', { instancia_id, status: 'desconectado', ready: false }); } catch (e) { }
@@ -333,6 +440,13 @@ exports.disconnectDevice = async (req, res) => {
     }
 
     if (clients[device.instancia_id]) {
+      // Intentar logout real para desvincular del teléfono
+      try {
+        console.log(`🚪 Cerrando sesión en WhatsApp para: ${device.instancia_id}`);
+        await clients[device.instancia_id].client.logout();
+      } catch (e) {
+        console.log('⚠️ No se pudo hacer logout (quizás ya estaba desconectado):', e.message);
+      }
       delete clients[device.instancia_id];
     }
 
@@ -354,6 +468,57 @@ exports.disconnectDevice = async (req, res) => {
     res.status(500).json({ error: 'Error interno' });
   }
 };
+
+// Sincronización periódica de estado (Heartbeat)
+async function syncDbStatus() {
+  db.query('SELECT instancia_id, estado, numero FROM dispositivos_whatsapp', async (err, devices) => {
+    if (err) return;
+
+    for (const device of devices) {
+      const memoryState = clients[device.instancia_id];
+      const isConnectedInMemory = memoryState && memoryState.ready;
+
+      // Deep Check: Si está "conectado" en memoria, verificar el estado real con el navegador
+      if (isConnectedInMemory && memoryState.client) {
+        try {
+          const actualState = await memoryState.client.getState();
+          if (actualState !== 'CONNECTED') {
+            console.log(`📡 Estado real de ${device.instancia_id} es ${actualState}. Sincronizando a desconectado.`);
+            memoryState.ready = false;
+            memoryState.state = actualState;
+            db.query('UPDATE dispositivos_whatsapp SET estado = "desconectado" WHERE instancia_id = ?', [device.instancia_id]);
+            try { require('../main').io.emit('deviceStatusChanged', { instancia_id: device.instancia_id, status: 'desconectado', ready: false }); } catch (e) { }
+          }
+        } catch (e) {
+          console.error(`⚠️ Error al verificar estado real de ${device.instancia_id}:`, e.message);
+          // Si el error indica que la sesión está cerrada o el navegador murió
+          if (e.message.includes('Session closed') || e.message.includes('Target closed')) {
+            memoryState.ready = false;
+            db.query('UPDATE dispositivos_whatsapp SET estado = "desconectado" WHERE instancia_id = ?', [device.instancia_id]);
+            try { require('../main').io.emit('deviceStatusChanged', { instancia_id: device.instancia_id, status: 'desconectado', ready: false }); } catch (e) { }
+          }
+        }
+      }
+
+      // 1. Caso ZOMBIE: BD dice "conectado" pero Memoria no tiene cliente
+      if (device.estado === 'conectado' && !isConnectedInMemory) {
+        console.log(`🧟 Zombie detectado: ${device.numero}. Corrigiendo a desconectado.`);
+        db.query('UPDATE dispositivos_whatsapp SET estado = "desconectado" WHERE instancia_id = ?', [device.instancia_id]);
+        try { require('../main').io.emit('deviceStatusChanged', { instancia_id: device.instancia_id, status: 'desconectado', ready: false }); } catch (e) { }
+      }
+
+      // 2. Caso FANTASMA: Memoria está OK pero BD dice "desconectado"
+      if (device.estado === 'desconectado' && isConnectedInMemory) {
+        console.log(`👻 Fantasma detectado: ${device.numero}. Corrigiendo a conectado.`);
+        db.query('UPDATE dispositivos_whatsapp SET estado = "conectado" WHERE instancia_id = ?', [device.instancia_id]);
+        try { require('../main').io.emit('deviceStatusChanged', { instancia_id: device.instancia_id, status: 'conectado', ready: true }); } catch (e) { }
+      }
+    }
+  });
+}
+
+// Ejecutar sincronización cada 60 segundos
+setInterval(syncDbStatus, 60000);
 
 exports.deleteDevice = async (req, res) => {
   try {
@@ -399,13 +564,42 @@ exports.getAllConnections = async (req, res) => {
 
 exports.updateDevice = async (req, res) => {
   try {
-    const { numero, nombre, instancia_id } = req.body;
-    const identifier = instancia_id || numero;
-    if (!identifier) return res.status(400).json({ error: 'Identificador requerido' });
+    const { identifier, instancia_id, nombre } = req.body;
+    // Si no viene identifier (frontend viejo), tratamos de usar instancia_id como key
+    const targetId = identifier || instancia_id;
 
-    await deviceController.updateDevice(identifier, { nombre });
+    if (!targetId) return res.status(400).json({ error: 'Identificador requerido' });
+
+    // Si hay cambio de ID (instancia_id nuevo != targetId antiguo)
+    if (instancia_id && instancia_id !== targetId) {
+      console.log(`🔄 Cambio de ID solicitado: ${targetId} -> ${instancia_id}`);
+
+      // 1. Destruir cliente en memoria si existe
+      if (clients[targetId]) {
+        try {
+          console.log('🛑 Cerrando cliente antiguo...');
+          await clients[targetId].client.destroy();
+        } catch (e) {
+          console.error('Error cerrando cliente antiguo:', e.message);
+        }
+        delete clients[targetId];
+      }
+
+      // 2. Limpiar carpeta de sesión antigua
+      const fs = require('fs');
+      const oldSessionPath = `./.wwebjs_auth/session-${targetId}`;
+      if (fs.existsSync(oldSessionPath)) {
+        try {
+          fs.rmSync(oldSessionPath, { recursive: true, force: true });
+          console.log('🧹 Sesión antigua eliminada del disco.');
+        } catch (e) { }
+      }
+    }
+
+    await deviceController.updateDevice(targetId, { nombre, instancia_id });
     res.json({ success: true });
   } catch (error) {
+    console.error('Error en updateDevice:', error);
     res.status(500).json({ error: error.message });
   }
 };

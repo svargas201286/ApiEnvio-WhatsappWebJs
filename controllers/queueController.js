@@ -82,9 +82,44 @@ exports.addToQueue = (req, res) => {
         console.error('Error al encolar:', err);
         return res.status(500).json({ error: 'Error al guardar mensaje en cola', details: err.sqlMessage || err.message });
       }
-      res.json({ success: true, queue_id: result.insertId, message: 'Mensaje encolado', from: sender });
 
-      processQueue();
+      // Si el cliente pide esperar confirmación (Dashboard)
+      if (req.body.wait) {
+        let attempts = 0;
+        const maxAttempts = 20; // 10 segundos (20 * 500ms)
+
+        const checkStatus = setInterval(() => {
+          attempts++;
+          db.query('SELECT estado, error FROM cola_mensajes WHERE id = ?', [result.insertId], (err, rows) => {
+            if (err || rows.length === 0) {
+              clearInterval(checkStatus);
+              return res.status(500).json({ error: 'Error verificando estado' });
+            }
+
+            const estado = rows[0].estado;
+            if (estado === 'enviado') {
+              clearInterval(checkStatus);
+              return res.json({ success: true, message: 'Enviado correctamente', from: sender });
+            } else if (estado === 'fallido') {
+              clearInterval(checkStatus);
+              return res.status(500).json({ error: rows[0].error || 'Error desconocido al enviar' });
+            } else if (attempts >= maxAttempts) {
+              clearInterval(checkStatus);
+              // Timeout, pero el mensaje sigue en cola
+              return res.json({ success: true, message: 'Mensaje en cola (tiempo de espera agotado)', from: sender, warning: 'timeout' });
+            }
+            // Si sigue pendiente/procesando, continuamos esperando...
+          });
+        }, 500);
+
+        // Disparar procesador
+        processQueue();
+
+      } else {
+        // Comportamiento asíncrono original (rápido)
+        res.json({ success: true, queue_id: result.insertId, message: 'Mensaje encolado', from: sender });
+        processQueue();
+      }
     });
   });
 };
