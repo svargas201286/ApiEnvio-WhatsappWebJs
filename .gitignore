@@ -26,6 +26,9 @@ Thumbs.db
 .env.local
 .env.production
 
-# Archivos de backup
-*.zip
-*.bak
+# Carpeta de sesiones de Baileys
+sessions/
+
+# Archivos de subida
+uploads/
+public/uploads/

@@ -1,6 +1,7 @@
 const db = require('../db');
 const whatsappController = require('./whatsappController');
-const { MessageMedia } = require('whatsapp-web.js');
+const fs = require('fs');
+const path = require('path');
 
 // Configuración
 const MESSAGE_DELAY = 5000; // 5 segundos entre mensajes por instancia
@@ -8,9 +9,6 @@ const PROCESS_INTERVAL = 2000; // Verificar cola cada 2 segundos
 
 // Estado en memoria para bloquear instancias que están procesando
 const processingInstances = new Set();
-
-const fs = require('fs');
-const path = require('path');
 
 // Añadir mensaje a la cola
 exports.addToQueue = (req, res) => {
@@ -70,7 +68,6 @@ exports.addToQueue = (req, res) => {
 
     const instancia_id = results[0].instancia_id;
 
-    // Volvemos al INSERT original (sin filename/mimetype) porque no se pudo alterar la DB
     const insertQuery = `
             INSERT INTO cola_mensajes 
             (instancia_id, numero_destino, mensaje, tipo, media_url, caption, from_number, estado)
@@ -105,18 +102,14 @@ exports.addToQueue = (req, res) => {
               return res.status(500).json({ error: rows[0].error || 'Error desconocido al enviar' });
             } else if (attempts >= maxAttempts) {
               clearInterval(checkStatus);
-              // Timeout, pero el mensaje sigue en cola
               return res.json({ success: true, message: 'Mensaje en cola (tiempo de espera agotado)', from: sender, warning: 'timeout' });
             }
-            // Si sigue pendiente/procesando, continuamos esperando...
           });
         }, 500);
 
-        // Disparar procesador
         processQueue();
 
       } else {
-        // Comportamiento asíncrono original (rápido)
         res.json({ success: true, queue_id: result.insertId, message: 'Mensaje encolado', from: sender });
         processQueue();
       }
@@ -126,13 +119,12 @@ exports.addToQueue = (req, res) => {
 
 // Procesador principal (Loop)
 function startQueueProcessor() {
-  console.log('🚀 Iniciando Procesador de Colas de Mensajes...');
+  console.log('🚀 Iniciando Procesador de Colas de Mensajes Baileys...');
   setInterval(processQueue, PROCESS_INTERVAL);
 }
 
 // Función que busca instancias con trabajo pendiente
 function processQueue() {
-  // Buscar instancias distintas que tengan mensajes pendientes Y no estén procesando actualmente
   const query = `
         SELECT DISTINCT instancia_id 
         FROM cola_mensajes 
@@ -143,10 +135,12 @@ function processQueue() {
   db.query(query, (err, results) => {
     if (err) return console.error('Error polling queue:', err);
 
+    if (results.length > 0) {
+      console.log(`📋 Cola detectada: ${results.length} instancia(s) con mensajes pendientes.`);
+    }
+
     results.forEach(row => {
       const instanceId = row.instancia_id;
-
-      // Si no está bloqueada, iniciamos procesador para esa instancia
       if (!processingInstances.has(instanceId)) {
         processInstanceQueue(instanceId);
       }
@@ -158,17 +152,12 @@ function processQueue() {
 async function processInstanceQueue(instancia_id) {
   if (processingInstances.has(instancia_id)) return;
 
-  // Bloquear instancia
   processingInstances.add(instancia_id);
 
-  console.log(`🔄 Procesando cola para instancia: ${instancia_id}`);
-
   try {
-    // Loop while there are pending messages
     let pending = true;
 
     while (pending) {
-      // Obtener el mensaje más antiguo
       const msg = await getNextMessage(instancia_id);
 
       if (!msg) {
@@ -176,58 +165,48 @@ async function processInstanceQueue(instancia_id) {
         break;
       }
 
-      // Marcar como procesando
+      console.log(`✉️ Procesando mensaje ID ${msg.id} para ${msg.numero_destino} via ${instancia_id}...`);
       await updateMessageStatus(msg.id, 'procesando');
 
-      // Enviar
       let success = false;
       let errorMsg = null;
 
       try {
-        // Verificar cliente
-        const clientReady = await isClientReady(instancia_id);
-        if (!clientReady) {
-          throw new Error('Cliente WhatsApp no está listo/conectado');
+        const clients = whatsappController.getClients();
+        const clientData = clients[instancia_id];
+
+        if (!clientData || !clientData.ready || !clientData.sock) {
+          throw new Error(`Instancia ${instancia_id} no está conectada o lista.`);
         }
 
+        const jid = `${msg.numero_destino.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
+
         if (msg.tipo === 'texto') {
-          // Simulamos req, res para reutilizar metodo o llamamos logica directa
-          // Mejor llamar logica directa. Accedemos a clients[instancia_id]
-          const clients = whatsappController.getClients();
-          const clientData = clients[instancia_id];
-          await clientData.client.sendMessage(`${msg.numero_destino}@c.us`, msg.mensaje, { sendSeen: false });
+          await clientData.sock.sendMessage(jid, { text: msg.mensaje });
           success = true;
+          console.log(`✅ Mensaje ${msg.id} enviado exitosamente.`);
 
         } else if (msg.tipo === 'media' || msg.tipo === 'documento') {
-          const clients = whatsappController.getClients();
-          const clientData = clients[instancia_id];
+          let messageConfig = {};
+          let filePath = msg.media_url;
 
-          // Reconstruir media
-          let mediaObj = null;
-
-          if (msg.media_url.startsWith('uploads') || msg.media_url.includes('/') || msg.media_url.includes('\\')) {
-            // Es un archivo local (ruta)
-            mediaObj = MessageMedia.fromFilePath(msg.media_url);
-          } else if (msg.media_url.startsWith('data:')) {
-            // Base64 Data URI
-            const parts = msg.media_url.split(',');
-            const mime = parts[0].match(/:(.*?);/)[1];
-            const data = parts[1];
-            mediaObj = new MessageMedia(mime, data, msg.filename || msg.caption || 'file');
-          } else {
-            // Fallback: Usar mimetype/filename guardado en BD, o inferir
-            let mime = msg.mimetype;
-            if (!mime) {
-              mime = msg.tipo === 'documento' ? 'application/pdf' : 'image/jpeg';
+          if (filePath && (fs.existsSync(filePath) || filePath.includes('/') || filePath.includes('\\'))) {
+            const buffer = fs.readFileSync(filePath);
+            if (msg.tipo === 'documento' || filePath.toLowerCase().endsWith('.pdf') || filePath.toLowerCase().endsWith('.xml')) {
+              messageConfig.document = buffer;
+              messageConfig.mimetype = filePath.toLowerCase().endsWith('.xml') ? 'application/xml' : 'application/pdf';
+              messageConfig.fileName = path.basename(filePath);
+            } else {
+              messageConfig.image = buffer;
             }
-            mediaObj = new MessageMedia(mime, msg.media_url, msg.filename || msg.caption || 'file');
+            messageConfig.caption = msg.caption || msg.mensaje;
+
+            await clientData.sock.sendMessage(jid, messageConfig);
+            success = true;
+            console.log(`✅ Media/Doc ${msg.id} enviado exitosamente.`);
+          } else {
+            throw new Error('Archivo media no encontrado en disco: ' + filePath);
           }
-
-          await clientData.client.sendMessage(`${msg.numero_destino}@c.us`, mediaObj, { caption: msg.caption, sendSeen: false });
-
-          // Opcional: Borrar archivo temporal después de envío exitoso?
-          // Por ahora lo dejamos para historial o debug audit
-          success = true;
         }
 
       } catch (err) {
@@ -235,14 +214,12 @@ async function processInstanceQueue(instancia_id) {
         errorMsg = err.message;
       }
 
-      // Actualizar estado final
       await updateMessageStatus(msg.id, success ? 'enviado' : 'fallido', errorMsg);
 
-      // Esperar Delay (Rate Limiting)
       if (success) {
+        // Pausa entre mensajes para evitar spam
         await new Promise(resolve => setTimeout(resolve, MESSAGE_DELAY));
       } else {
-        // Si falló, quizás esperar menos o igual para no atascar
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
@@ -250,9 +227,7 @@ async function processInstanceQueue(instancia_id) {
   } catch (globalErr) {
     console.error(`Error crítico procesando instancia ${instancia_id}:`, globalErr);
   } finally {
-    // Desbloquear instancia
     processingInstances.delete(instancia_id);
-    console.log(`✅ Fin procesamiento cola instancia: ${instancia_id}`);
   }
 }
 

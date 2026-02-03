@@ -2,6 +2,8 @@ const express = require('express');
 const app = express();
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
 const db = require('./db');
 const routes = require('./routes/index');
 const whatsappController = require('./controllers/whatsappController');
@@ -85,46 +87,49 @@ async function initializeWhatsApp() {
   try {
     // Buscar dispositivos existentes en la base de datos
     // Buscar dispositivos que NO están explícitamente desconectados
-    db.query('SELECT numero, instancia_id FROM dispositivos_whatsapp WHERE estado != "desconectado"', async (err, results) => {
-      if (err) {
-        console.error('Error al obtener dispositivos:', err);
-        return;
+    db.query('SELECT numero, instancia_id FROM dispositivos_whatsapp WHERE estado != "desconectado"', async (err, results = []) => {
+      let devicesToInit = Array.isArray(results) ? [...results] : [];
+
+      console.log('🔍 [STARTUP] Escaneando carpetas de sesión para persistencia local...');
+      const sessionsDir = path.join(__dirname, 'sessions');
+      if (fs.existsSync(sessionsDir)) {
+        try {
+          const folders = fs.readdirSync(sessionsDir);
+          for (const folder of folders) {
+            const infoPath = path.join(sessionsDir, folder, 'device_info.json');
+            if (fs.existsSync(infoPath)) {
+              try {
+                const info = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
+                if (info.instancia_id && !devicesToInit.some(d => d.instancia_id === info.instancia_id)) {
+                  console.log(`📂 [STARTUP] Sesión local encontrada: ${info.numero || 'S/N'} (${info.instancia_id})`);
+                  devicesToInit.push(info);
+                }
+              } catch (e) { }
+            }
+          }
+        } catch (e) { }
       }
 
-      if (results.length > 0) {
-        console.log(`📱 [STARTUP] Inicializando WhatsApp para ${results.length} dispositivo(s)...`);
+      if (devicesToInit.length > 0) {
+        console.log(`📱 [STARTUP] Inicializando ${devicesToInit.length} dispositivo(s) en total.`);
+        io.emit('deviceStatusChanged', { action: 'global_init', status: 'conectando' });
 
-        // Marcar TODOS como 'conectando' visualmente antes de iniciar el proceso pesado
-        // Esto da feedback inmediato al usuario de que el sistema "los vio" a todos
-        const ids = results.map(d => `'${d.instancia_id}'`).join(',');
-        if (ids) {
-          await new Promise(resolve => {
-            db.query(`UPDATE dispositivos_whatsapp SET estado = 'conectando' WHERE instancia_id IN (${ids})`, (err) => {
-              if (err) console.error('❌ Error actualizando estados iniciales:', err);
-              // Emitir evento masivo para actualizar UI instantáneamente
-              io.emit('deviceStatusChanged', { action: 'global_init', status: 'conectando' });
-              resolve();
-            });
-          });
-        }
-
-        for (const device of results) {
+        for (const device of devicesToInit) {
           const { numero, instancia_id } = device;
-          console.log(`🔗 [STARTUP] Disparando inicio de: ${numero} (${instancia_id})`);
+          if (!instancia_id) continue;
 
-          // NO usamos await aquí para no bloquear el siguiente.
-          // Se inicia en "fondo", y el siguiente comienza en 10s.
+          console.log(`🔗 [STARTUP] Lanzando conexión para: ${numero || 'Instancia'} (${instancia_id})`);
+
+          // Lanzar en paralelo
           whatsappController.ensureClient(numero, instancia_id)
-            .then(() => console.log(`✅ [STARTUP] Checkpoint de inicio: ${numero}`))
-            .catch(error => console.error(`❌ [STARTUP] Error al iniciar ${numero}:`, error.message));
+            .catch(err => console.error(`❌ [STARTUP] Error en ${instancia_id}:`, err.message));
 
-          // Esperar 10 segundos antes de lanzar el siguiente para no saturar CPU/RAM
-          console.log(`⏳ Esperando 10s antes del siguiente dispositivo...`);
-          await new Promise(resolve => setTimeout(resolve, 10000));
+          // Pequeño jitter para no bombardear el socket simultáneamente
+          await new Promise(res => setTimeout(res, 500));
         }
-        console.log('🏁 [STARTUP] Inicialización masiva completada.');
+        console.log('🏁 [STARTUP] Inicialización masiva terminada.');
       } else {
-        console.log('📱 [STARTUP] No hay dispositivos registrados en BD.');
+        console.log('📱 [STARTUP] Sin dispositivos en BD ni carpetas.');
       }
     });
   } catch (error) {
@@ -214,12 +219,12 @@ app.use((req, res) => {
   });
 });
 
-// Socket.IO connection handling
+// Socket.IO connection handling (Dashboard Sync)
 io.on('connection', (socket) => {
-  console.log('🔌 Cliente conectado via WebSocket:', socket.id);
+  console.log('�️  Dashboard conectado (Sincronización):', socket.id);
 
   socket.on('disconnect', () => {
-    console.log('🔌 Cliente desconectado:', socket.id);
+    console.log('�️  Dashboard desconectado:', socket.id);
   });
 });
 

@@ -15,7 +15,7 @@ if (!fs.existsSync('./main.js')) {
 // Verificar dependencias
 console.log('📦 Verificando dependencias...');
 const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-const requiredDeps = ['express', 'whatsapp-web.js', 'mysql2', 'qrcode'];
+const requiredDeps = ['express', '@whiskeysockets/baileys', 'mysql2', 'qrcode', 'pino'];
 
 for (const dep of requiredDeps) {
   if (!packageJson.dependencies[dep]) {
@@ -29,7 +29,7 @@ console.log('✅ Dependencias verificadas');
 // Función para reiniciar el proceso si falla
 function startProcess() {
   console.log('🔄 Iniciando proceso principal...');
-  
+
   const child = spawn('node', ['main.js'], {
     stdio: 'inherit',
     cwd: process.cwd()

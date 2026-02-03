@@ -708,16 +708,16 @@
             <form id="addDeviceForm">
                 <div class="form-group">
                     <label>Nombre del dispositivo:</label>
-                    <input type="text" id="deviceName" placeholder="Ej: Dispositivo Principal" required>
+                    <input type="text" id="deviceName" placeholder="Ej: Oficina, Ventas, Personal..." required>
+                    <small style="color: #6c757d; font-size: 12px;">Identifica tu dispositivo para gestionarlo mejor.</small>
                 </div>
-                <div class="form-group">
-                    <label>Número de teléfono:</label>
-                    <input type="text" id="devicePhone" placeholder="51988888888" required>
-                    <small style="color: #6c757d; font-size: 12px;">Incluye el código de país sin el +</small>
-                </div>
-                <div class="form-group">
-                    <label>Contraseña:</label>
-                    <input type="password" id="devicePassword" placeholder="Contraseña para el dispositivo" required>
+                <div class="form-group" style="background: #f8f9fa; padding: 10px; border-radius: 5px; border: 1px dashed #dee2e6;">
+                    <p style="font-size: 13px; margin: 0; color: #495057;">
+                        <i class="fas fa-magic"></i> La <b>Instancia ID</b> se generará automáticamente.
+                    </p>
+                    <p style="font-size: 11px; margin: 5px 0 0; color: #6c757d;">
+                        Podrás ver y cambiar el ID después si lo necesitas. El número de teléfono se vinculará al momento de escanear el código QR.
+                    </p>
                 </div>
             </form>
             <div class="modal-footer">
@@ -1351,15 +1351,14 @@
         // Agregar nuevo dispositivo
         async function addDevice() {
             const name = document.getElementById('deviceName').value;
-            const phone = document.getElementById('devicePhone').value;
-            const password = document.getElementById('devicePassword').value;
             
-            if (!name || !phone || !password) {
-                alert('Por favor completa todos los campos');
+            if (!name) {
+                showToast('Por favor escribe un nombre para el dispositivo', 'error');
                 return;
             }
             
             try {
+                showToast('Generando instancia...', 'info');
                 const response = await fetch('/api/add-device', {
                     method: 'POST',
                     headers: {
@@ -1367,22 +1366,20 @@
                         'Authorization': 'Bearer ' + sessionData.token
                     },
                     body: JSON.stringify({ 
-                        numero: phone, 
-                        password: password,
                         nombre: name 
                     })
                 });
                 
                 if (response.ok) {
-                    alert('Dispositivo agregado correctamente');
+                    showToast('Dispositivo agregado correctamente', 'success');
                     closeAddDeviceModal();
                     refreshDevices();
                 } else {
                     const error = await response.json();
-                    alert('Error al agregar dispositivo: ' + (error.message || 'Error desconocido'));
+                    showToast('Error: ' + (error.message || 'Error desconocido'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error de conexión: ' + error.message, 'error');
             }
         }
 
