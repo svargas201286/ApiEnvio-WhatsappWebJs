@@ -17,7 +17,7 @@
 
 ## 🎯 Introducción
 
-Esta API permite enviar mensajes y documentos por WhatsApp utilizando múltiples dispositivos. Está construida con Node.js y utiliza `whatsapp-web.js` para la integración con WhatsApp Web.
+Esta API permite enviar mensajes y documentos por WhatsApp utilizando múltiples dispositivos. Está construida con Node.js y utiliza `@whiskeysockets/baileys` para la integración nativa con WhatsApp vía Sockets.
 
 ### Características Principales
 
@@ -43,10 +43,10 @@ Para producción, reemplaza `localhost` con tu dominio o IP pública.
 
 ### Software Necesario
 
-- **Node.js**: v14.0.0 o superior
-- **npm**: v6.0.0 o superior
+- **Node.js**: v18.0.0 o superior
+- **npm**: v9.0.0 o superior
 - **MySQL**: v5.7 o superior
-- **Google Chrome** o **Chromium** (para Puppeteer)
+- **No requiere Chrome/Puppeteer** (Baileys usa sockets nativos)
 
 ### Conocimientos Recomendados
 
@@ -87,8 +87,7 @@ DB_PORT=3306
 # Configuración del Servidor
 PORT=3000
 
-# Ruta de Chrome (opcional, solo si no se detecta automáticamente)
-# CHROME_PATH=C:/Program Files/Google/Chrome/Application/chrome.exe
+# No se requiere configuración de Chrome con Baileys
 ```
 
 ### 4. Crear Base de Datos
@@ -897,12 +896,9 @@ Error: connect ECONNREFUSED 127.0.0.1:3306
 - No aparece código QR
 
 **Solución:**
-1. Verifica que Chrome/Chromium esté instalado
-2. Si usas Windows, especifica la ruta en `.env`:
-   ```env
-   CHROME_PATH=C:/Program Files/Google/Chrome/Application/chrome.exe
-   ```
-3. Reinicia el servidor
+1. Verifica la conexión a Internet.
+2. Verifica que no haya bloqueos de Firewall.
+3. Reinicia el servidor. Baileys no requiere Chrome, por lo que este error suele ser de red o de inicialización de socket.
 
 ---
 
@@ -915,24 +911,22 @@ Error: connect ECONNREFUSED 127.0.0.1:3306
 **Solución:**
 1. Verifica que solo haya una instancia del servidor corriendo
 2. No cierres WhatsApp Web en otros navegadores
-3. Verifica que la carpeta `.wwebjs_auth` tenga permisos de escritura
-4. Actualiza `whatsapp-web.js`:
+3. Verifica que la carpeta `sessions/` tenga permisos de escritura.
+4. Actualiza las dependencias:
    ```bash
-   npm update whatsapp-web.js
+   npm update @whiskeysockets/baileys
    ```
 
 ---
 
-### Problema: Error "Lid is missing"
+### Problema: Error de conexión Baileys
 
 **Síntomas:**
-```json
-{
-  "error": "Evaluation failed: Error: Lid is missing in chat table"
-}
-```
+- La sesión se cierra con códigos de error 401, 440, etc.
 
 **Solución:**
+1. Verifica que el dispositivo no haya cerrado sesión manualmente.
+2. Si el error persiste, borra la carpeta del dispositivo en `sessions/` y vuelve a escanear el QR.
 1. Verifica que el número de destino esté en formato correcto (sin `+`)
 2. Verifica que el número esté registrado en WhatsApp
 3. Intenta enviar un mensaje de texto primero antes de un documento

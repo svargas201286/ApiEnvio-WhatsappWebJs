@@ -92,7 +92,7 @@ async function ensureClient(numero, instancia_id) {
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'error' })),
     },
     logger: pino({ level: 'error' }),
-    browser: ['WhatsApp API', 'Chrome', '10.0'],
+    browser: ['WillayAPI', 'Chrome', '1.0.0'],
     markOnlineOnConnect: true,
     connectTimeoutMs: 60000,
     keepAliveIntervalMs: 30000,

@@ -20,8 +20,8 @@ Esta documentación detalla la arquitectura, configuración, mantenimiento y sol
 ### Componentes Principales
 
 1. **Node.js API (Backend)**
-   - Ejecuta `whatsapp-web.js` con Puppeteer (Chrome headless)
-   - Gestiona sesiones de WhatsApp, envío de mensajes y archivos
+   - Ejecuta `@whiskeysockets/baileys` (Librería sockets nativa)
+   - Gestiona sesiones de WhatsApp de forma ultra-ligera sin Chrome
    - **Puerto por defecto:** 3000 (configurable en `.env`)
    - **Gestor de Procesos:** PM2 (recomendado para producción)
 
@@ -56,8 +56,7 @@ WHATSAPP25/
 ├── public/              # Interfaz web
 │   ├── dashboard.html
 │   └── login.html
-├── .wwebjs_auth/        # Sesiones de WhatsApp (auto-generado)
-├── .wwebjs_cache/       # Cache de WhatsApp (auto-generado)
+├── sessions/             # Sesiones de WhatsApp Baileys (auto-generado)
 ├── logs/                # Logs del sistema
 ├── db.js                # Configuración de base de datos
 ├── main.js              # Punto de entrada principal
@@ -71,11 +70,10 @@ WHATSAPP25/
 
 ### Características Implementadas
 
-#### 1. **Persistencia de Sesiones**
 - ✅ Las conexiones de WhatsApp se mantienen activas indefinidamente
 - ✅ No se cierran automáticamente por inactividad
-- ✅ Estado guardado cada 5 minutos en `whatsapp-sessions.json`
-- ✅ Al reiniciar el servidor, se cargan las sesiones guardadas
+- ✅ Basado en sockets nativos (mucho más rápido y estable que web.js)
+- ✅ Al reiniciar el servidor, se cargan las sesiones guardadas automáticamente
 
 #### 2. **Reconexión Automática**
 - ✅ Si se pierde la conexión, se intenta reconectar en 5 segundos
@@ -161,7 +159,7 @@ Si WhatsApp se queda "pegado" o corrupto:
 ```bash
 cd /ruta/al/proyecto
 pm2 stop whatsapp-api
-rm -rf .wwebjs_auth .wwebjs_cache whatsapp-sessions.json
+rm -rf sessions/
 pm2 start whatsapp-api
 ```
 
@@ -206,22 +204,9 @@ pm2 restart whatsapp-api
 
 ---
 
-### Error: "Protocol error (Runtime.callFunctionOn): Target closed"
-
-**Causa:** Chrome/Puppeteer se crasheó por falta de memoria o librerías.
-
-**Solución en Linux:**
-```bash
-# Instalar dependencias de Chrome
-sudo apt-get install -y \
-  gconf-service libasound2 libatk1.0-0 libcups2 \
-  libdbus-1-3 libgconf-2-4 libgtk-3-0 libnspr4 \
-  libnss3 libx11-xcb1 libxss1 libxtst6 fonts-liberation \
-  libappindicator1 xdg-utils
-
-# Reiniciar servicio
-pm2 restart whatsapp-api
-```
+### Error: "Baileys connection closed"
+   - ✅ No requiere dependencias de Chrome/Puppeteer.
+   - ✅ Mucho más ligero en consumo de RAM (ideal para VPS pequeños).
 
 ---
 
@@ -284,7 +269,7 @@ node start.js
 
 2. **Usar PM2 con auto-reinicio:**
 ```bash
-pm2 start main.js --name whatsapp-api --max-memory-restart 500M
+pm2 start main.js --name whatsapp-api --max-memory-restart 200M
 pm2 save
 ```
 
